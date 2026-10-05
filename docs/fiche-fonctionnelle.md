@@ -50,6 +50,9 @@ Envoyée → Entretien → Offre
 - Mails **envoyés** par moi : candidatures spontanées, réponses, relances.
 - Exclus : spam, corbeille, newsletters et alertes d'offres (« 10 nouvelles offres pour vous »),
   qui ne sont pas des candidatures.
+- Exclus aussi (décision du 05/10/2026) : candidatures à une formation ou une école (y compris
+  en alternance), et approches spontanées de recruteurs pour un poste auquel je n'ai pas postulé.
+- Inclus : les demandes d'immersion professionnelle auprès d'une entreprise.
 
 Pas de liste d'expéditeurs ou de plateformes : les mails viennent d'ATS trop variés.
 Le pré-filtre (#7) se base donc sur le contenu, avec des filtres texte (mots-clés).
