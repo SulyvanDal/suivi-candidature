@@ -32,10 +32,12 @@ lecture du corps des mails.
 
 - `npm run list` : liste les mails des dernières 24 h (lance l'autorisation si nécessaire).
 - `npm run sync` : synchronisation incrémentale (premier passage depuis le 01/06/2026, puis
-  `historyId`) ; affiche le nombre de nouveaux mails et les en-têtes des 20 plus récents.
+  `historyId`) : extraction, pré-filtre, classification par Claude, enregistrement ; affiche
+  le bilan, le coût et les mails liés à une candidature. Appelle Claude (payant).
 - `npm run extract -- <id>` : affiche le texte extrait d'un mail.
 - `npm run filter -- --days 14` : simulation du pré-filtre (décision et règle par mail), sans
   rien écrire ni envoyer.
+- `npm run eval:classify` : évalue la classification sur le jeu annoté (appelle Claude, ~0,10 $).
 - `npm test` : tests automatiques (`node:test`, fichiers `src/**/*.test.ts`).
 - `npm run typecheck` : vérification des types.
 
@@ -99,8 +101,15 @@ lecture du corps des mails.
   utilisateur) : objet et contenu uniquement. En cas de doute on garde, Claude triera.
 - Tous les appels Gmail passent par `withRetry` (`src/retry.ts`) : le quota « unités par minute
   par utilisateur » est vite atteint (constaté avec 10 téléchargements en parallèle).
-- ⚠️ `data/suivi.db` est une **base de test** tant que l'analyse n'existe pas : les mails y sont
-  marqués traités sans analyse. **La supprimer avant de brancher l'analyse Claude (#8).**
+- Classification (`src/classify.ts`) : **Claude Haiku 4.5** (choix utilisateur, coût), sortie
+  structurée zod, types `candidature_envoyee | entretien | offre | refus | autre | hors_sujet`.
+  Citations retirées et texte plafonné à 8 000 caractères avant envoi. Clé dans
+  `secrets/anthropic-api-key`. Résultats dans la table `mail_results` (règle du pré-filtre + type).
+- Évaluation : `npm run eval:classify` sur `data/annotations-classification.json` (hors git,
+  annoté avec l'utilisateur) : 44/46. Erreurs restantes : prospection EIC classée `autre`.
+  Ne pas sur-ajuster le prompt sur quelques mails : préférer une règle en aval (#10) ou #15.
+- `data/suivi.db` contient les **vraies données** depuis le premier passage du 05/10/2026
+  (1 419 mails, 246 envoyés à Claude, 94 liés à une candidature, 0,49 $).
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est
   affichée dans le terminal que si l'ouverture échoue.
 
