@@ -41,6 +41,10 @@ lecture du corps des mails.
   (appelle Claude, ~0,18 $).
 - `npm run reanalyse` : repasse à Claude les mails déjà gardés par le pré-filtre et met la base
   à jour (appelle Claude, ~0,55 $). **Toujours demander confirmation avant toute commande payante.**
+  Seule exception autorisée par l'utilisateur (05/10/2026) : la synchronisation automatique
+  quotidienne (#12, `sync -- --auto`), plafonnée à 50 mails envoyés à Claude par jour.
+- `npm run auto:installer` / `auto:desinstaller` / `auto:statut` : synchronisation automatique
+  quotidienne via launchd (#12), lancée par l'utilisateur. Journaux : `data/logs/` (comptes uniquement).
 - `npm run ui` : interface web locale sur http://127.0.0.1:4321 (gratuit, lecture seule de la base).
 - `npm run candidatures` : recalcule les candidatures et les affiche (gratuit, n'appelle pas Claude).
 - `npm test` : tests automatiques (`node:test`, fichiers `src/**/*.test.ts`).
@@ -130,6 +134,10 @@ lecture du corps des mails.
   `pas_candidature`, écrites depuis la page d'une candidature (#18). Annulation = suppression de
   la ligne, depuis la page « Corrections ». Fusion et retrait d'un mail : reportés (#19).
   Principe utilisateur : ne développer que ce qui sert maintenant, noter le reste en issue.
+- Synchronisation automatique (#12) : launchd tous les jours à 8 h → `scripts/sync-auto.sh` →
+  `sync-run.ts --auto` : jamais de navigateur (`AuthorizationRequiredError`), plafond
+  (`src/budget.ts`, le reste attend le lendemain grâce à la reprise de #5), journal sans contenu de
+  mail, notification macOS **uniquement en cas de problème** (autorisation expirée, plafond, erreur).
 - Interface (`src/ui/`, #13 découpée en #16 consultation, #17 À classer, #18 édition) :
   **Hono + HTML généré côté serveur + htmx** (choix utilisateur ; migration vers React possible
   plus tard). `app.ts` (routes, testable via `app.request` sans serveur), `queries.ts` (lectures,

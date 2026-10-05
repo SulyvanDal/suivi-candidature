@@ -23,8 +23,15 @@ const TOKEN_PATH = "secrets/token.json";
 // Délai laissé pour accepter l'autorisation dans le navigateur.
 const CONSENT_TIMEOUT_MS = 5 * 60 * 1000;
 
-/** Renvoie un client OAuth2 prêt à appeler les API Google. */
-export async function getAuthorizedClient(): Promise<OAuth2Client> {
+/** Levée en mode non interactif quand il faudrait ouvrir le navigateur pour réautoriser. */
+export class AuthorizationRequiredError extends Error {}
+
+/**
+ * Renvoie un client OAuth2 prêt à appeler les API Google.
+ * interactive = false (synchronisation automatique, #12) : n'ouvre jamais le navigateur ;
+ * lève AuthorizationRequiredError si une nouvelle autorisation est nécessaire.
+ */
+export async function getAuthorizedClient({ interactive = true } = {}): Promise<OAuth2Client> {
   const { clientId, clientSecret } = await readClientCredentials();
 
   const saved = await readSavedTokens();
@@ -45,12 +52,14 @@ export async function getAuthorizedClient(): Promise<OAuth2Client> {
       // test, accès révoqué, mot de passe changé…). Seule solution : redemander
       // l'autorisation.
       if (!isInvalidGrant(err)) throw err;
+      if (!interactive) throw new AuthorizationRequiredError("Autorisation Gmail expirée ou révoquée.");
       console.log("Autorisation expirée ou révoquée : nouvelle autorisation nécessaire.");
       await rm(TOKEN_PATH, { force: true });
     }
   }
 
-  // Étape B : aucun jeton utilisable → flux d'autorisation complet.
+  // Étape B : aucun jeton utilisable → flux d'autorisation complet (navigateur).
+  if (!interactive) throw new AuthorizationRequiredError("Aucune autorisation Gmail enregistrée.");
   return authorizeInBrowser(clientId, clientSecret);
 }
 

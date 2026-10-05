@@ -1,62 +1,115 @@
 // Lance une synchronisation : chaque nouveau mail est extrait, pré-filtré, puis classé par
-// Claude s'il est gardé ; le résultat est enregistré en base.
+// Claude s'il est gardé ; le résultat est enregistré en base, puis les candidatures sont recalculées.
+//
+//   npm run sync           mode manuel : détail des mails, autorisation dans le navigateur si besoin
+//   npm run sync -- --auto mode automatique (#12, lancé par launchd) : jamais de navigateur,
+//                          plafond de mails envoyés à Claude, journal sans contenu de mail,
+//                          notification macOS en cas de problème uniquement
 
 import { gmail } from "@googleapis/gmail";
-import { getAuthorizedClient } from "./auth.js";
+import { AuthorizationRequiredError, getAuthorizedClient } from "./auth.js";
+import { DailyBudgetReachedError, withBudget } from "./budget.js";
 import { rebuildCandidatures } from "./candidatures.js";
 import { classifyMail, createClient, MODEL } from "./classify.js";
 import { openDb } from "./db.js";
+import { notify } from "./notify.js";
 import { processMessage, type ProcessedMail } from "./pipeline.js";
 import { withRetry } from "./retry.js";
 import { gmailSource, syncNewMessages } from "./sync.js";
 
 // Coût de Claude Haiku 4.5, en dollars par million de jetons (entrée / sortie).
 const PRICE_PER_MTOK = { input: 1, output: 5 };
+/** Plafond quotidien en mode automatique (décision utilisateur : 50 mails, ~0,15 $ au plus). */
+const DAILY_CLAUDE_LIMIT = 50;
 
-const api = gmail({ version: "v1", auth: await getAuthorizedClient() });
-const claude = createClient();
-const db = openDb();
+const auto = process.argv.includes("--auto");
+const stamp = () => new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
+const NOTIFY_TITLE = "Suivi de candidatures";
 
-const processed: ProcessedMail[] = [];
-const tokens = { input: 0, output: 0 };
+async function main(): Promise<number> {
+  const api = gmail({ version: "v1", auth: await getAuthorizedClient({ interactive: !auto }) });
+  const claude = createClient();
+  const db = openDb();
+  const budget = withBudget(classifyMail, auto ? DAILY_CLAUDE_LIMIT : Infinity);
+
+  const processed: ProcessedMail[] = [];
+  const tokens = { input: 0, output: 0 };
+  let mode = "interrompue";
+  let budgetReached = false;
+
+  try {
+    try {
+      ({ mode } = await syncNewMessages(db, gmailSource(api), async (id) => {
+        const p = await processMessage(id, {
+          db,
+          model: MODEL,
+          fetchMessage: async (messageId) =>
+            (await withRetry(() => api.users.messages.get({ userId: "me", id: messageId, format: "full" }))).data,
+          classify: (mail) => budget.call(claude, mail),
+        });
+        processed.push(p);
+        if (p.result) {
+          tokens.input += p.result.usage.inputTokens;
+          tokens.output += p.result.usage.outputTokens;
+          if (p.result.truncated && !auto) console.log(`  (texte coupé à l'envoi : ${p.mail.id} « ${p.mail.subject} »)`);
+        }
+        if (!auto && processed.length % 50 === 0) console.log(`  … ${processed.length} mails traités`);
+      }));
+    } catch (err) {
+      // Plafond atteint : on garde ce qui a été traité, le reste attend la prochaine synchronisation.
+      if (!(err instanceof DailyBudgetReachedError)) throw err;
+      budgetReached = true;
+    }
+
+    const kept = processed.filter((p) => p.result);
+    const relevant = kept.filter((p) => p.result!.classification.type !== "hors_sujet");
+    const cost = (tokens.input * PRICE_PER_MTOK.input + tokens.output * PRICE_PER_MTOK.output) / 1e6;
+    const { candidatures } = rebuildCandidatures(db);
+    const toCheck = candidatures.filter((c) => c.toCheck).length;
+
+    if (auto) {
+      // Journal : uniquement des comptes (ni objets, ni expéditeurs, ni secrets).
+      console.log(
+        `${stamp()} · synchronisation ${mode} · ${processed.length} mail(s), ${kept.length} envoyé(s) à Claude, ` +
+          `${relevant.length} lié(s) à une candidature · ${cost.toFixed(3)} $ · ${candidatures.length} candidature(s)` +
+          (budgetReached ? " · PLAFOND ATTEINT" : ""),
+      );
+    } else {
+      console.log(`\nSynchronisation ${mode} : ${processed.length} nouveau(x) mail(s).`);
+      console.log(`  Pré-filtre : ${kept.length} gardé(s), ${processed.length - kept.length} écarté(s).`);
+      console.log(`  Claude : ${relevant.length} lié(s) à une candidature, ${kept.length - relevant.length} hors sujet.`);
+      console.log(`  Coût estimé : ${cost.toFixed(3)} $ (${tokens.input} jetons en entrée, ${tokens.output} en sortie).`);
+      if (relevant.length > 0) console.log("\nMails liés à une candidature :");
+      for (const { mail, result } of relevant) {
+        const date = mail.date.toLocaleDateString("fr-FR");
+        console.log(`  ${date}  ${result!.classification.type.padEnd(20)} ${mail.from.slice(0, 35).padEnd(35)} | ${mail.subject}`);
+      }
+      console.log(`\n${candidatures.length} candidature(s) suivie(s)${toCheck ? `, ${toCheck} à vérifier` : ""} (détail : npm run ui).`);
+    }
+
+    if (budgetReached) {
+      if (auto) {
+        await notify(NOTIFY_TITLE, `Plafond de ${DAILY_CLAUDE_LIMIT} mails atteint : la suite sera traitée demain.`);
+      }
+      return 3;
+    }
+    return 0;
+  } finally {
+    db.close();
+  }
+}
 
 try {
-  const { mode } = await syncNewMessages(db, gmailSource(api), async (id) => {
-    const p = await processMessage(id, {
-      db,
-      model: MODEL,
-      fetchMessage: async (messageId) =>
-        (await withRetry(() => api.users.messages.get({ userId: "me", id: messageId, format: "full" }))).data,
-      classify: (mail) => classifyMail(claude, mail),
-    });
-    processed.push(p);
-    if (p.result) {
-      tokens.input += p.result.usage.inputTokens;
-      tokens.output += p.result.usage.outputTokens;
-      if (p.result.truncated) console.log(`  (texte coupé à l'envoi : ${p.mail.id} « ${p.mail.subject} »)`);
-    }
-    if (processed.length % 50 === 0) console.log(`  … ${processed.length} mails traités`);
-  });
-
-  const kept = processed.filter((p) => p.result);
-  const relevant = kept.filter((p) => p.result!.classification.type !== "hors_sujet");
-  console.log(`\nSynchronisation ${mode} : ${processed.length} nouveau(x) mail(s).`);
-  console.log(`  Pré-filtre : ${kept.length} gardé(s), ${processed.length - kept.length} écarté(s).`);
-  console.log(`  Claude : ${relevant.length} lié(s) à une candidature, ${kept.length - relevant.length} hors sujet.`);
-
-  const cost = (tokens.input * PRICE_PER_MTOK.input + tokens.output * PRICE_PER_MTOK.output) / 1e6;
-  console.log(`  Coût estimé : ${cost.toFixed(3)} $ (${tokens.input} jetons en entrée, ${tokens.output} en sortie).`);
-
-  if (relevant.length > 0) console.log("\nMails liés à une candidature :");
-  for (const { mail, result } of relevant) {
-    const date = mail.date.toLocaleDateString("fr-FR");
-    console.log(`  ${date}  ${result!.classification.type.padEnd(20)} ${mail.from.slice(0, 35).padEnd(35)} | ${mail.subject}`);
+  process.exitCode = await main();
+} catch (err) {
+  const message = err instanceof Error ? err.message : String(err);
+  if (err instanceof AuthorizationRequiredError) {
+    console.log(`${stamp()} · ${message} Lancer « npm run sync » pour réautoriser.`);
+    if (auto) await notify(NOTIFY_TITLE, "Autorisation Gmail expirée : lance « npm run sync » pour réautoriser.");
+    process.exitCode = 2;
+  } else {
+    console.log(`${stamp()} · Synchronisation échouée : ${message}`);
+    if (auto) await notify(NOTIFY_TITLE, "Synchronisation échouée : voir le journal dans data/logs.");
+    process.exitCode = 1;
   }
-
-  // Candidatures recalculées à partir de tous les événements (#10).
-  const { candidatures } = rebuildCandidatures(db);
-  const toCheck = candidatures.filter((c) => c.toCheck).length;
-  console.log(`\n${candidatures.length} candidature(s) suivie(s)${toCheck ? `, ${toCheck} à vérifier` : ""} (détail : npm run candidatures).`);
-} finally {
-  db.close();
 }

@@ -14,7 +14,10 @@
     "candidatures": "tsx src/candidatures-run.ts",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "ui": "tsx src/ui/server.ts"
+    "ui": "tsx src/ui/server.ts",
+    "auto:installer": "tsx src/auto-install.ts installer",
+    "auto:desinstaller": "tsx src/auto-install.ts desinstaller",
+    "auto:statut": "tsx src/auto-install.ts statut"
   },
   "repository": {
     "type": "git",
