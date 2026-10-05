@@ -31,6 +31,8 @@ lecture du corps des mails.
 ## Commandes
 
 - `npm run list` : liste les mails des dernières 24 h (lance l'autorisation si nécessaire).
+- `npm run sync` : synchronisation incrémentale (premier passage depuis le 01/06/2026, puis
+  `historyId`) ; affiche le nombre de nouveaux mails et les en-têtes des 20 plus récents.
 - `npm test` : tests automatiques (`node:test`, fichiers `src/**/*.test.ts`).
 - `npm run typecheck` : vérification des types.
 
@@ -79,6 +81,12 @@ lecture du corps des mails.
 - Base locale : `node:sqlite` (intégré à Node), fichier `data/suivi.db` (exclu de git),
   module `src/db.ts`. Le schéma évolue par migrations versionnées avec `PRAGMA user_version` :
   ne jamais modifier une migration livrée, en ajouter une à la fin.
+- Synchronisation (`src/sync.ts`) : historyId lu avant le listing initial ; un mail n'est marqué
+  traité qu'après succès, le historyId n'est enregistré qu'en fin de passage ; 404 sur
+  `history.list` → rattrapage par date (dernière synchro − 1 jour). Spams, corbeille et
+  brouillons exclus, mails envoyés gardés. Gmail est injecté (`MailSource`) pour les tests.
+- ⚠️ `data/suivi.db` est une **base de test** tant que l'analyse n'existe pas : les mails y sont
+  marqués traités sans analyse. **La supprimer avant de brancher l'analyse Claude (#8).**
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est
   affichée dans le terminal que si l'ouverture échoue.
 
