@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type Anthropic from "@anthropic-ai/sdk";
-import { classifyMail, ClassificationRefusedError, MODEL, prepareText } from "./classify.js";
+import { classifyMail, ClassificationRefusedError, MODEL, prepareText, sanitize } from "./classify.js";
 import type { ExtractedMail } from "./extract.js";
 
 // Faux client Claude : aucun appel payant pendant les tests. Mails fabriqués uniquement.
@@ -32,7 +32,15 @@ function fakeClient(response: object) {
 
 const okResponse = {
   stop_reason: "end_turn",
-  parsed_output: { type: "refus", justification: "Réponse négative." },
+  parsed_output: {
+    type: "refus",
+    justification: "Réponse négative.",
+    entreprise: "Exemple SA",
+    poste: "Product Owner",
+    lieu: "Bordeaux",
+    canal: "Hellowork",
+    lien_offre: null,
+  },
   usage: { input_tokens: 500, output_tokens: 40 },
 };
 
@@ -40,7 +48,8 @@ test("envoie le mail à Haiku avec une sortie structurée, renvoie la classifica
   const { client, calls } = fakeClient(okResponse);
   const result = await classifyMail(client, mail({ sent: true }));
 
-  assert.deepEqual(result.classification, { type: "refus", justification: "Réponse négative." });
+  assert.equal(result.classification.type, "refus");
+  assert.equal(result.classification.entreprise, "Exemple SA");
   assert.deepEqual(result.usage, { inputTokens: 500, outputTokens: 40 });
   assert.equal(calls[0].model, MODEL);
   assert.ok(calls[0].output_config.format, "sortie structurée demandée");
@@ -81,4 +90,32 @@ test("texte trop long : coupé et signalé", () => {
   assert.equal(truncated, true);
   assert.ok(text.length < 8100);
   assert.match(text, /\[… texte coupé\]$/);
+});
+
+const base = {
+  type: "candidature_envoyee" as const,
+  justification: "Accusé de réception.",
+  entreprise: " Talan ",
+  poste: "Développeur Java",
+  lieu: "",
+  canal: "Hellowork",
+  lien_offre: null as string | null,
+};
+
+test("extraction : espaces retirés, chaînes vides → null", () => {
+  const c = sanitize(base, "texte");
+  assert.equal(c.entreprise, "Talan");
+  assert.equal(c.lieu, null);
+});
+
+test("extraction : mail hors sujet → aucune information", () => {
+  const c = sanitize({ ...base, type: "hors_sujet" }, "texte");
+  assert.deepEqual([c.entreprise, c.poste, c.lieu, c.canal, c.lien_offre], [null, null, null, null, null]);
+});
+
+test("lien de l'offre gardé seulement s'il figure en entier dans le mail", () => {
+  const text = "Voir l'offre : https://exemple.com/offre/42 et https://cts.indeed.com/…";
+  assert.equal(sanitize({ ...base, lien_offre: "https://exemple.com/offre/42" }, text).lien_offre, "https://exemple.com/offre/42");
+  assert.equal(sanitize({ ...base, lien_offre: "https://exemple.com/offre/99" }, text).lien_offre, null, "inventé");
+  assert.equal(sanitize({ ...base, lien_offre: "https://cts.indeed.com/…" }, text).lien_offre, null, "raccourci");
 });

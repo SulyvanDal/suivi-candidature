@@ -37,7 +37,10 @@ lecture du corps des mails.
 - `npm run extract -- <id>` : affiche le texte extrait d'un mail.
 - `npm run filter -- --days 14` : simulation du pré-filtre (décision et règle par mail), sans
   rien écrire ni envoyer.
-- `npm run eval:classify` : évalue la classification sur le jeu annoté (appelle Claude, ~0,10 $).
+- `npm run eval:classify` : évalue la classification et l'extraction sur le jeu annoté
+  (appelle Claude, ~0,18 $).
+- `npm run reanalyse` : repasse à Claude les mails déjà gardés par le pré-filtre et met la base
+  à jour (appelle Claude, ~0,55 $). **Toujours demander confirmation avant toute commande payante.**
 - `npm test` : tests automatiques (`node:test`, fichiers `src/**/*.test.ts`).
 - `npm run typecheck` : vérification des types.
 
@@ -105,8 +108,13 @@ lecture du corps des mails.
   structurée zod, types `candidature_envoyee | entretien | offre | refus | autre | hors_sujet`.
   Citations retirées et texte plafonné à 8 000 caractères avant envoi. Clé dans
   `secrets/anthropic-api-key`. Résultats dans la table `mail_results` (règle du pré-filtre + type).
+- Extraction (#9, même appel) : entreprise (jamais la plateforme ni l'ATS), poste, lieu, canal,
+  lien de l'offre ; null si absent, jamais deviné. Garde-fous dans `sanitize` : rien pour un mail
+  hors sujet, lien gardé seulement s'il figure en entier dans le texte envoyé.
 - Évaluation : `npm run eval:classify` sur `data/annotations-classification.json` (hors git,
-  annoté avec l'utilisateur) : 44/46. Erreurs restantes : prospection EIC classée `autre`.
+  annoté avec l'utilisateur, 68 mails) : type 67/68, entreprise 35/36, poste 30/30, lieu 18/18,
+  canal 5/5. Erreurs restantes : approche LinkedIn d'une recruteuse classée `entretien`, Hays
+  (cabinet) sans entreprise.
   Ne pas sur-ajuster le prompt sur quelques mails : préférer une règle en aval (#10) ou #15.
 - `data/suivi.db` contient les **vraies données** depuis le premier passage du 05/10/2026
   (1 419 mails, 246 envoyés à Claude, 94 liés à une candidature, 0,49 $).

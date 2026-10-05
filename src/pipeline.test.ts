@@ -35,7 +35,15 @@ function deps(messages: gmail_v1.Schema$Message[]) {
       classify: async (mail: { id: string }) => {
         classified.push(mail.id);
         return {
-          classification: { type: "entretien" as const, justification: "Invitation." },
+          classification: {
+            type: "entretien" as const,
+            justification: "Invitation.",
+            entreprise: "Exemple SA",
+            poste: "Product Owner",
+            lieu: null,
+            canal: "mail direct",
+            lien_offre: null,
+          },
           truncated: false,
           usage: { inputTokens: 1, outputTokens: 1 },
         };
@@ -54,6 +62,9 @@ test("mail gardé par le pré-filtre : classé par Claude et enregistré", async
   assert.equal(row.event_type, "entretien");
   assert.equal(row.model, "modele-test");
   assert.equal(row.sent, 0);
+  assert.equal(row.company, "Exemple SA");
+  assert.equal(row.job_title, "Product Owner");
+  assert.equal(row.location, null);
 });
 
 test("mail écarté par le pré-filtre : pas envoyé à Claude, mais sa règle est enregistrée", async () => {

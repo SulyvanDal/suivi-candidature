@@ -35,6 +35,11 @@ export async function processMessage(id: string, deps: PipelineDeps): Promise<Pr
     eventType: result?.classification.type,
     justification: result?.classification.justification,
     model: result ? deps.model : undefined,
+    company: result?.classification.entreprise,
+    jobTitle: result?.classification.poste,
+    location: result?.classification.lieu,
+    channel: result?.classification.canal,
+    offerUrl: result?.classification.lien_offre,
   });
   return { mail, decision, result };
 }

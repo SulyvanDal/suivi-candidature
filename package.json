@@ -10,6 +10,7 @@
     "extract": "tsx src/extract-run.ts",
     "filter": "tsx src/filter-run.ts",
     "eval:classify": "tsx src/classify-eval.ts",
+    "reanalyse": "tsx src/reanalyse.ts",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },

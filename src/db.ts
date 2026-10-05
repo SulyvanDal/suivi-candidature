@@ -41,6 +41,14 @@ const MIGRATIONS: string[] = [
     processed_at  TEXT NOT NULL
   );
   `,
+  // 3 — Informations de candidature extraites par Claude (#9)
+  `
+  ALTER TABLE mail_results ADD COLUMN company   TEXT;
+  ALTER TABLE mail_results ADD COLUMN job_title TEXT;
+  ALTER TABLE mail_results ADD COLUMN location  TEXT;
+  ALTER TABLE mail_results ADD COLUMN channel   TEXT;
+  ALTER TABLE mail_results ADD COLUMN offer_url TEXT;
+  `,
 ];
 
 /** Ouvre la base (en la créant si besoin) et applique les migrations manquantes. */
@@ -90,13 +98,19 @@ export interface MailResult {
   eventType?: string;
   justification?: string;
   model?: string;
+  company?: string | null;
+  jobTitle?: string | null;
+  location?: string | null;
+  channel?: string | null;
+  offerUrl?: string | null;
 }
 
 export function saveMailResult(db: DatabaseSync, r: MailResult): void {
   db.prepare(
     `INSERT OR REPLACE INTO mail_results
-       (gmail_id, received_at, sent, filter_rule, filter_match, event_type, justification, model, processed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (gmail_id, received_at, sent, filter_rule, filter_match, event_type, justification, model,
+        company, job_title, location, channel, offer_url, processed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     r.gmailId,
     r.receivedAt.toISOString(),
@@ -106,6 +120,11 @@ export function saveMailResult(db: DatabaseSync, r: MailResult): void {
     r.eventType ?? null,
     r.justification ?? null,
     r.model ?? null,
+    r.company ?? null,
+    r.jobTitle ?? null,
+    r.location ?? null,
+    r.channel ?? null,
+    r.offerUrl ?? null,
     new Date().toISOString(),
   );
 }
