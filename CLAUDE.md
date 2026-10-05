@@ -122,4 +122,5 @@ Suivie dans les issues GitHub (`gh issue list`) :
 5. Analyse par Claude : #8 classification, #9 extraction structurée, #10 rattachement aux candidatures
 6. Restitution et automatisation : #11 tableau dans le terminal, #12 exécution quotidienne (`launchd`),
    #13 interface avec édition manuelle
-7. Améliorations : #14 marquer les offres fermées (mails Hellowork « n'est plus disponible »)
+7. Améliorations : #14 marquer les offres fermées (mails Hellowork « n'est plus disponible »),
+   #15 listes d'expéditeurs bloqués / toujours gardés, gérées depuis l'interface (en base, pas dans le code)
