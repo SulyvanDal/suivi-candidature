@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { buildPlist, LABEL } from "./auto-install.js";
+import { buildPlist, LABEL, stableNodeDir } from "./auto-install.js";
 import { DailyBudgetReachedError, withBudget } from "./budget.js";
 import { appleScriptString } from "./notify.js";
 
@@ -44,4 +44,10 @@ test("fichier launchd : valide pour macOS, lancé à l'heure demandée avec le d
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("dossier de node : le chemin versionné de Homebrew est remplacé par le lien stable opt/", () => {
+  assert.equal(stableNodeDir("/opt/homebrew/Cellar/node/26.8.1/bin/node"), "/opt/homebrew/opt/node/bin");
+  assert.equal(stableNodeDir("/usr/local/Cellar/node@22/22.9.0/bin/node"), "/usr/local/opt/node@22/bin");
+  assert.equal(stableNodeDir("/usr/local/bin/node"), "/usr/local/bin", "hors Homebrew : inchangé");
 });

@@ -57,6 +57,17 @@ export function buildPlist(projectDir: string, nodeDir: string, hour: number): s
 `;
 }
 
+/**
+ * Dossier de node à mettre dans le PATH, stable dans le temps. Avec Homebrew, process.execPath
+ * pointe dans Cellar/node/<version>/bin, supprimé au prochain `brew upgrade` : on prend à la place
+ * le lien opt/<formule>/bin, que Homebrew fait toujours suivre la version installée.
+ */
+export function stableNodeDir(execPath: string): string {
+  const dir = dirname(execPath);
+  const cellar = dir.match(/^(.*)\/Cellar\/([^/]+)\/[^/]+\/bin$/);
+  return cellar ? `${cellar[1]}/opt/${cellar[2]}/bin` : dir;
+}
+
 const domain = () => `gui/${process.getuid?.() ?? execFileSync("id", ["-u"]).toString().trim()}`;
 
 function isLoaded(): boolean {
@@ -72,7 +83,9 @@ function install(): void {
   mkdirSync(dirname(PLIST_PATH), { recursive: true });
   mkdirSync(join(PROJECT_DIR, "data", "logs"), { recursive: true });
   if (isLoaded()) execFileSync("launchctl", ["bootout", `${domain()}/${LABEL}`]);
-  writeFileSync(PLIST_PATH, buildPlist(PROJECT_DIR, dirname(process.execPath), HOUR));
+  const nodeDir = stableNodeDir(process.execPath);
+  if (!existsSync(join(nodeDir, "node"))) throw new Error(`node introuvable dans ${nodeDir}`);
+  writeFileSync(PLIST_PATH, buildPlist(PROJECT_DIR, nodeDir, HOUR));
   execFileSync("launchctl", ["bootstrap", domain(), PLIST_PATH]);
   console.log(`Synchronisation automatique installée : tous les jours à ${HOUR} h.`);
   console.log(`Fichier : ${PLIST_PATH}`);
