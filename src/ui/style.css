@@ -1,31 +1,42 @@
+/* Ambiance douce et chaleureuse : tons beiges, sauge et terracotta, polices Apple.
+   Le mode sombre suit automatiquement celui du Mac. */
+
 :root {
-  --fond: #f7f7f5;
-  --surface: #ffffff;
-  --texte: #1f2328;
-  --discret: #656d76;
-  --bordure: #d8dee4;
-  --lien: #0b5cad;
-  --envoyee: #0b5cad;
-  --sans-reponse: #8a6100;
-  --entretien: #6639ba;
-  --offre: #1a7f37;
-  --refus: #a40e26;
+  --fond: #f6f1ea;
+  --surface: #fffdf9;
+  --surface-douce: #f1eadf;
+  --texte: #2f2a25;
+  --discret: #847868;
+  --bordure: #e7ddcf;
+  --accent: #b5603f;
+
+  --envoyee-fond: #e4ebdc;     --envoyee: #4c6a44;
+  --sans-reponse-fond: #f3e5c9; --sans-reponse: #8a6420;
+  --entretien-fond: #e8e1f0;   --entretien: #634f86;
+  --offre-fond: #d9ecdc;       --offre: #2f6e43;
+  --refus-fond: #f4dfd8;       --refus: #9c4a35;
+
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --rayon: 14px;
   color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --fond: #0f1115;
-    --surface: #171a21;
-    --texte: #e6edf3;
-    --discret: #8d96a0;
-    --bordure: #30363d;
-    --lien: #6cb6ff;
-    --envoyee: #6cb6ff;
-    --sans-reponse: #d4a72c;
-    --entretien: #b392f0;
-    --offre: #57ab5a;
-    --refus: #f47067;
+    --fond: #1b1815;
+    --surface: #24201c;
+    --surface-douce: #2c2722;
+    --texte: #ede6dc;
+    --discret: #a69b8c;
+    --bordure: #3a332c;
+    --accent: #df8a64;
+
+    --envoyee-fond: #2e3829;     --envoyee: #b6cfac;
+    --sans-reponse-fond: #3c311f; --sans-reponse: #e3c488;
+    --entretien-fond: #332c3f;   --entretien: #cbbde4;
+    --offre-fond: #223829;       --offre: #a6d7b2;
+    --refus-fond: #3f2722;       --refus: #ebb4a4;
   }
 }
 
@@ -35,94 +46,153 @@ body {
   margin: 0;
   background: var(--fond);
   color: var(--texte);
-  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 16px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-header {
-  padding: 12px 24px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--bordure);
+main { max-width: 880px; margin: 0 auto; padding: 56px 24px 80px; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* En-têtes */
+.entete { margin-bottom: 32px; }
+h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 2.4rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
 }
+h2 {
+  margin: 48px 0 16px;
+  font-family: var(--serif);
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+.sous-titre { margin: 6px 0 0; color: var(--discret); font-size: 1.05rem; }
+.retour { margin: 0 0 24px; font-size: 0.95rem; }
+.retour a { color: var(--discret); }
 
-.brand { font-weight: 600; color: var(--texte); text-decoration: none; }
-
-main { max-width: 1200px; margin: 0 auto; padding: 24px; }
-
-a { color: var(--lien); }
-
-h1 { display: flex; align-items: center; gap: 12px; margin: 8px 0 0; font-size: 1.6rem; }
-h2 { margin-top: 32px; font-size: 1.15rem; }
-.poste { margin: 4px 0 16px; color: var(--discret); font-size: 1.05rem; }
-
-.filtres { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+/* Filtres */
+.filtres { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
 .filtre {
-  padding: 4px 12px;
-  border: 1px solid var(--bordure);
+  padding: 6px 14px;
   border-radius: 999px;
-  background: var(--surface);
+  background: var(--surface-douce);
   color: var(--texte);
-  text-decoration: none;
+  font-size: 0.92rem;
+  transition: background 0.15s;
 }
-.filtre.actif { border-color: var(--lien); color: var(--lien); font-weight: 600; }
-.compteur { color: var(--discret); font-variant-numeric: tabular-nums; }
+.filtre:hover { text-decoration: none; background: var(--bordure); }
+.filtre.actif { background: var(--texte); color: var(--fond); }
+.compteur { margin-left: 4px; opacity: 0.6; font-variant-numeric: tabular-nums; }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
+/* Liste aérée */
+.liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   background: var(--surface);
-  border: 1px solid var(--bordure);
-  border-radius: 8px;
-  overflow: hidden;
+  border-radius: var(--rayon);
+  box-shadow: 0 1px 2px rgb(60 40 20 / 0.06), 0 0 0 1px var(--bordure);
 }
-th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--bordure); vertical-align: top; }
-th { font-size: 0.85rem; color: var(--discret); font-weight: 600; }
-tbody tr:last-child td { border-bottom: none; }
-td:first-child { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.liste li + li { border-top: 1px solid var(--bordure); }
+.ligne { display: block; padding: 18px 24px; color: inherit; }
+.ligne:hover { text-decoration: none; background: var(--surface-douce); }
+.liste li:first-child .ligne { border-radius: var(--rayon) var(--rayon) 0 0; }
+.liste li:last-child .ligne { border-radius: 0 0 var(--rayon) var(--rayon); }
 
+.ligne-principale { display: flex; align-items: center; gap: 10px; }
+.entreprise { font-weight: 600; font-size: 1.05rem; }
+.ligne-principale .badge { margin-left: auto; }
+.ligne-secondaire {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 0;
+  margin-top: 4px;
+  color: var(--discret);
+  font-size: 0.92rem;
+}
+.ligne-secondaire span + span::before { content: "·"; margin: 0 8px; opacity: 0.6; }
+
+/* Statuts */
 .badge {
   display: inline-block;
-  padding: 1px 10px;
-  border: 1px solid currentColor;
+  padding: 3px 12px;
   border-radius: 999px;
   font-size: 0.8rem;
   font-weight: 600;
   white-space: nowrap;
 }
-.badge-envoyee { color: var(--envoyee); }
-.badge-sans-reponse { color: var(--sans-reponse); }
-.badge-entretien { color: var(--entretien); }
-.badge-offre { color: var(--offre); }
-.badge-refus { color: var(--refus); }
+.badge-envoyee { background: var(--envoyee-fond); color: var(--envoyee); }
+.badge-sans-reponse { background: var(--sans-reponse-fond); color: var(--sans-reponse); }
+.badge-entretien { background: var(--entretien-fond); color: var(--entretien); }
+.badge-offre { background: var(--offre-fond); color: var(--offre); }
+.badge-refus { background: var(--refus-fond); color: var(--refus); }
 
-.a-verifier { margin-left: 6px; color: var(--sans-reponse); }
-.alerte { color: var(--sans-reponse); }
-.vide { color: var(--discret); }
-
-dl {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 16px;
-  padding: 16px;
-  background: var(--surface);
-  border: 1px solid var(--bordure);
-  border-radius: 8px;
+.a-verifier {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sans-reponse-fond);
+  color: var(--sans-reponse);
+  font-size: 0.75rem;
 }
-dt { color: var(--discret); }
-dd { margin: 0; overflow-wrap: anywhere; }
-
-.mails { list-style: none; padding: 0; display: grid; gap: 12px; }
-.mails li {
+.alerte {
   padding: 12px 16px;
-  background: var(--surface);
-  border: 1px solid var(--bordure);
-  border-radius: 8px;
+  border-radius: var(--rayon);
+  background: var(--sans-reponse-fond);
+  color: var(--sans-reponse);
 }
-.mail-entete { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--discret); font-size: 0.9rem; }
-.mail-type { font-weight: 600; color: var(--texte); }
-.mail-objet { margin: 4px 0; font-weight: 500; }
-.mail-justification { color: var(--discret); font-size: 0.9rem; margin-bottom: 4px; }
+.vide { color: var(--discret); font-style: italic; }
 
-@media (max-width: 720px) {
-  main { padding: 16px; }
-  th:nth-child(5), td:nth-child(5) { display: none; }
+/* Page d'une candidature */
+.titre-detail { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+
+.infos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 20px;
+  margin: 0;
+  padding: 24px;
+  background: var(--surface);
+  border-radius: var(--rayon);
+  box-shadow: 0 0 0 1px var(--bordure);
+}
+.info dt { color: var(--discret); font-size: 0.85rem; margin-bottom: 2px; }
+.info dd { margin: 0; overflow-wrap: anywhere; }
+.manquant { color: var(--discret); opacity: 0.7; }
+
+/* Historique : frise verticale */
+.historique { list-style: none; margin: 0; padding: 0 0 0 24px; border-left: 2px solid var(--bordure); }
+.evenement { position: relative; padding: 0 0 28px 20px; }
+.evenement::before {
+  content: "";
+  position: absolute;
+  left: -32px;
+  top: 6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--discret);
+  box-shadow: 0 0 0 4px var(--fond);
+}
+.evenement-candidature_envoyee::before { background: var(--envoyee); }
+.evenement-entretien::before { background: var(--entretien); }
+.evenement-offre::before { background: var(--offre); }
+.evenement-refus::before { background: var(--refus); }
+
+.evenement-entete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.mail-type { font-weight: 600; }
+.mail-date { color: var(--discret); font-size: 0.92rem; }
+.mail-objet { margin-top: 4px; font-family: var(--serif); font-size: 1.05rem; }
+.mail-sens { color: var(--discret); font-size: 0.9rem; }
+.mail-justification { margin: 8px 0; color: var(--discret); font-size: 0.92rem; font-style: italic; }
+.mail-lien { font-size: 0.9rem; }
+
+@media (max-width: 640px) {
+  main { padding: 32px 16px 64px; }
+  h1 { font-size: 1.9rem; }
+  .ligne { padding: 16px; }
 }

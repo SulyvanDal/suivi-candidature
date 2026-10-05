@@ -6,16 +6,29 @@ import type { CandidatureRow, DisplayStatus, MailRow } from "./queries.js";
 import { DISPLAY_STATUSES } from "./queries.js";
 
 const TYPE_LABELS: Record<string, string> = {
-  candidature_envoyee: "Candidature / accusé",
+  candidature_envoyee: "Candidature envoyée",
   entretien: "Entretien",
   offre: "Offre",
   refus: "Refus",
   autre: "Échange",
 };
 
-const date = (d: Date) => d.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" });
-const statusClass = (s: DisplayStatus) =>
-  `badge badge-${s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, "-")}`;
+const TZ = "Europe/Paris";
+/** « 30 sept. », avec l'année seulement si ce n'est pas l'année en cours. */
+function date(d: Date): string {
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("fr-FR", {
+    timeZone: TZ,
+    day: "numeric",
+    month: "short",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+}
+const longDate = (d: Date) => d.toLocaleDateString("fr-FR", { timeZone: TZ, day: "numeric", month: "long", year: "numeric" });
+
+const statusSlug = (s: DisplayStatus) =>
+  s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, "-");
+const badge = (s: DisplayStatus) => html`<span class="badge badge-${statusSlug(s)}">${s}</span>`;
 const gmailUrl = (m: MailRow) => `https://mail.google.com/mail/u/0/#all/${m.threadId ?? m.gmailId}`;
 
 function layout(title: string, body: unknown) {
@@ -29,13 +42,12 @@ function layout(title: string, body: unknown) {
         <script src="/htmx.js" defer></script>
       </head>
       <body>
-        <header><a href="/" class="brand">Suivi de candidatures</a></header>
         <main>${body}</main>
       </body>
     </html>`;
 }
 
-/** Page principale : filtres par statut et tableau. */
+/** Page principale : filtres par statut et liste aérée. */
 export function listPage(all: CandidatureRow[], filter: DisplayStatus | null) {
   const rows = filter ? all.filter((c) => c.status === filter) : all;
   const count = (s: DisplayStatus) => all.filter((c) => c.status === s).length;
@@ -55,71 +67,75 @@ export function listPage(all: CandidatureRow[], filter: DisplayStatus | null) {
   };
 
   return layout(
-    "Candidatures",
-    html`<div id="contenu">
-      <nav class="filtres">
-        ${filterLink("Toutes", null, all.length)}
-        ${DISPLAY_STATUSES.map((s) => filterLink(s, s, count(s)))}
-      </nav>
-      ${rows.length === 0
-        ? html`<p class="vide">Aucune candidature.</p>`
-        : html`<table>
-            <thead>
-              <tr>
-                <th>Candidature</th>
-                <th>Statut</th>
-                <th>Entreprise</th>
-                <th>Poste</th>
-                <th>Lieu</th>
-                <th>Dernier événement</th>
-              </tr>
-            </thead>
-            <tbody>
+    "Mes candidatures",
+    html`<header class="entete">
+        <h1>Mes candidatures</h1>
+        <p class="sous-titre">${all.length} candidatures depuis le 1<sup>er</sup> juin</p>
+      </header>
+      <div id="contenu">
+        <nav class="filtres">
+          ${filterLink("Toutes", null, all.length)}
+          ${DISPLAY_STATUSES.map((s) => filterLink(s, s, count(s)))}
+        </nav>
+        ${rows.length === 0
+          ? html`<p class="vide">Aucune candidature ici.</p>`
+          : html`<ul class="liste">
               ${rows.map(
-                (c) => html`<tr>
-                  <td>${date(c.appliedAt)}</td>
-                  <td><span class="${statusClass(c.status)}">${c.status}</span></td>
-                  <td>
-                    <a href="/candidatures/${c.id}">${c.company ?? "Entreprise inconnue"}</a>
-                    ${c.toCheck ? html`<span class="a-verifier" title="Rattachement à vérifier">⚠</span>` : ""}
-                  </td>
-                  <td>${c.jobTitle ?? "—"}</td>
-                  <td>${c.location ?? "—"}</td>
-                  <td>${date(c.lastEventAt)} · ${TYPE_LABELS[c.lastEventType] ?? c.lastEventType}</td>
-                </tr>`,
+                (c) => html`<li>
+                  <a class="ligne" href="/candidatures/${c.id}">
+                    <div class="ligne-principale">
+                      <span class="entreprise">${c.company ?? "Entreprise inconnue"}</span>
+                      ${c.toCheck ? html`<span class="a-verifier" title="Rattachement à vérifier">à vérifier</span>` : ""}
+                      ${badge(c.status)}
+                    </div>
+                    <div class="ligne-secondaire">
+                      <span>${c.jobTitle ?? "Poste non précisé"}</span>
+                      ${c.location ? html`<span>${c.location}</span>` : ""}
+                      <span>Candidature le ${date(c.appliedAt)}</span>
+                      <span>${TYPE_LABELS[c.lastEventType] ?? c.lastEventType} le ${date(c.lastEventAt)}</span>
+                    </div>
+                  </a>
+                </li>`,
               )}
-            </tbody>
-          </table>`}
-    </div>`,
+            </ul>`}
+      </div>`,
   );
 }
 
-/** Page d'une candidature : ses champs et ses mails. */
+/** Page d'une candidature : ses informations et ses mails. */
 export function detailPage(c: CandidatureRow, mails: MailRow[]) {
-  const field = (label: string, value: unknown) => html`<dt>${label}</dt><dd>${value ?? "—"}</dd>`;
+  const field = (label: string, value: unknown) =>
+    html`<div class="info"><dt>${label}</dt><dd>${value ?? html`<span class="manquant">Non précisé</span>`}</dd></div>`;
   return layout(
-    `${c.company ?? "Candidature"} – ${c.jobTitle ?? ""}`,
-    html`<p><a href="/">← Toutes les candidatures</a></p>
-      <h1>${c.company ?? "Entreprise inconnue"} <span class="${statusClass(c.status)}">${c.status}</span></h1>
-      <p class="poste">${c.jobTitle ?? "Poste inconnu"}</p>
-      ${c.toCheck ? html`<p class="alerte">⚠ Un mail au moins a été rattaché par défaut : à vérifier.</p>` : ""}
-      <dl>
-        ${field("Date de candidature", date(c.appliedAt))} ${field("Lieu", c.location)} ${field("Canal", c.channel)}
-        ${field("Lien de l'offre", c.offerUrl ? html`<a href="${c.offerUrl}" rel="noreferrer">${c.offerUrl}</a>` : null)}
+    `${c.company ?? "Candidature"} · ${c.jobTitle ?? ""}`,
+    html`<p class="retour"><a href="/">← Mes candidatures</a></p>
+      <header class="entete">
+        <div class="titre-detail">
+          <h1>${c.company ?? "Entreprise inconnue"}</h1>
+          ${badge(c.status)}
+        </div>
+        <p class="sous-titre">${c.jobTitle ?? "Poste non précisé"}</p>
+      </header>
+      ${c.toCheck
+        ? html`<p class="alerte">Un mail au moins a été rattaché par défaut à cette candidature : à vérifier.</p>`
+        : ""}
+      <dl class="infos">
+        ${field("Candidature", longDate(c.appliedAt))} ${field("Lieu", c.location)} ${field("Canal", c.channel)}
+        ${field("Offre", c.offerUrl ? html`<a href="${c.offerUrl}" rel="noreferrer">Voir l'annonce</a>` : null)}
       </dl>
-      <h2>Mails (${mails.length})</h2>
-      <ol class="mails">
+      <h2>Historique</h2>
+      <ol class="historique">
         ${mails.map(
-          (m) => html`<li>
-            <div class="mail-entete">
-              <span class="mail-date">${date(m.date)}</span>
+          (m) => html`<li class="evenement evenement-${m.type}">
+            <div class="evenement-entete">
               <span class="mail-type">${TYPE_LABELS[m.type] ?? m.type}</span>
-              <span class="mail-sens">${m.sent ? "envoyé à" : "reçu de"} ${m.correspondent ?? "?"}</span>
-              ${m.toCheck ? html`<span class="a-verifier">⚠ à vérifier</span>` : ""}
+              <span class="mail-date">${longDate(m.date)}</span>
+              ${m.toCheck ? html`<span class="a-verifier">à vérifier</span>` : ""}
             </div>
             <div class="mail-objet">${m.subject || "(sans objet)"}</div>
-            ${m.justification ? html`<div class="mail-justification">${m.justification}</div>` : ""}
-            <a href="${gmailUrl(m)}" target="_blank" rel="noreferrer">Ouvrir dans Gmail ↗</a>
+            <div class="mail-sens">${m.sent ? "Envoyé à" : "Reçu de"} ${m.correspondent ?? "?"}</div>
+            ${m.justification ? html`<p class="mail-justification">${m.justification}</p>` : ""}
+            <a class="mail-lien" href="${gmailUrl(m)}" target="_blank" rel="noreferrer">Ouvrir dans Gmail</a>
           </li>`,
         )}
       </ol>`,
@@ -127,5 +143,9 @@ export function detailPage(c: CandidatureRow, mails: MailRow[]) {
 }
 
 export function notFoundPage() {
-  return layout("Introuvable", html`<p>Candidature introuvable.</p><p><a href="/">← Toutes les candidatures</a></p>`);
+  return layout(
+    "Introuvable",
+    html`<p class="retour"><a href="/">← Mes candidatures</a></p>
+      <p class="vide">Cette candidature est introuvable.</p>`,
+  );
 }

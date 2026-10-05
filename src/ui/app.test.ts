@@ -67,8 +67,8 @@ test("page d'une candidature : ses mails dans l'ordre, lien vers le fil Gmail", 
   const res = await setup().request("/candidatures/c1");
   assert.equal(res.status, 200);
   const body = await res.text();
-  assert.match(body, /Mails \(2\)/);
-  const first = body.indexOf('mail-type">Candidature / accusé');
+  assert.equal(body.match(/class="evenement /g)?.length, 2);
+  const first = body.indexOf('mail-type">Candidature envoyée');
   const second = body.indexOf('mail-type">Refus');
   assert.ok(first > 0 && first < second, "accusé puis refus");
   assert.match(body, /mail\.google\.com\/mail\/u\/0\/#all\/t-c/);
