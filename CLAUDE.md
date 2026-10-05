@@ -34,6 +34,8 @@ lecture du corps des mails.
 - `npm run sync` : synchronisation incrémentale (premier passage depuis le 01/06/2026, puis
   `historyId`) ; affiche le nombre de nouveaux mails et les en-têtes des 20 plus récents.
 - `npm run extract -- <id>` : affiche le texte extrait d'un mail.
+- `npm run filter -- --days 14` : simulation du pré-filtre (décision et règle par mail), sans
+  rien écrire ni envoyer.
 - `npm test` : tests automatiques (`node:test`, fichiers `src/**/*.test.ts`).
 - `npm run typecheck` : vérification des types.
 
@@ -91,6 +93,12 @@ lecture du corps des mails.
   de 100 caractères (liens de suivi) raccourcies à leur domaine ; `multipart/report` (mail non
   distribué) réduit à sa première partie. Citations des réponses conservées (à traiter dans #8).
   Tests sur des mails fabriqués uniquement : ne jamais commiter de vrais mails.
+- Pré-filtre (`src/filter.ts`, règles dans `src/filter-rules.ts`) : exclusions nommées
+  (`non-distribue`, `offre-fermee`, `alerte-offres`) puis mots-clés en mots entiers, accents
+  significatifs (« poste » ≠ « posté »). **Pas de liste d'expéditeurs à maintenir** (décision
+  utilisateur) : objet et contenu uniquement. En cas de doute on garde, Claude triera.
+- Tous les appels Gmail passent par `withRetry` (`src/retry.ts`) : le quota « unités par minute
+  par utilisateur » est vite atteint (constaté avec 10 téléchargements en parallèle).
 - ⚠️ `data/suivi.db` est une **base de test** tant que l'analyse n'existe pas : les mails y sont
   marqués traités sans analyse. **La supprimer avant de brancher l'analyse Claude (#8).**
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est

@@ -9,6 +9,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { gmail_v1 } from "@googleapis/gmail";
 import { getSyncState, isProcessed, markProcessed, saveSyncState } from "./db.js";
+import { httpStatus, withRetry } from "./retry.js";
 
 /** Début de la recherche d'emploi (fiche fonctionnelle) : minuit, heure de Paris. */
 export const START_DATE = new Date("2026-06-01T00:00:00+02:00");
@@ -97,7 +98,7 @@ export async function syncNewMessages(
 export function gmailSource(api: gmail_v1.Gmail): MailSource {
   return {
     async currentHistoryId() {
-      const { data } = await api.users.getProfile({ userId: "me" });
+      const { data } = await withRetry(() => api.users.getProfile({ userId: "me" }));
       if (!data.historyId) throw new Error("Gmail n'a pas renvoyé de historyId.");
       return data.historyId;
     },
@@ -108,7 +109,9 @@ export function gmailSource(api: gmail_v1.Gmail): MailSource {
       const ids: string[] = [];
       let pageToken: string | undefined;
       do {
-        const { data } = await api.users.messages.list({ userId: "me", q, maxResults: 500, pageToken });
+        const { data } = await withRetry(() =>
+          api.users.messages.list({ userId: "me", q, maxResults: 500, pageToken }),
+        );
         for (const m of data.messages ?? []) if (m.id) ids.push(m.id);
         pageToken = data.nextPageToken ?? undefined;
       } while (pageToken);
@@ -122,13 +125,15 @@ export function gmailSource(api: gmail_v1.Gmail): MailSource {
       let pageToken: string | undefined;
       try {
         do {
-          const { data } = await api.users.history.list({
-            userId: "me",
-            startHistoryId,
-            historyTypes: ["messageAdded"],
-            maxResults: 500,
-            pageToken,
-          });
+          const { data } = await withRetry(() =>
+            api.users.history.list({
+              userId: "me",
+              startHistoryId,
+              historyTypes: ["messageAdded"],
+              maxResults: 500,
+              pageToken,
+            }),
+          );
           for (const record of data.history ?? []) {
             for (const { message } of record.messagesAdded ?? []) {
               if (message?.id) added.push({ id: message.id, labelIds: message.labelIds ?? [] });
@@ -144,9 +149,4 @@ export function gmailSource(api: gmail_v1.Gmail): MailSource {
       return { added, historyId };
     },
   };
-}
-
-export function httpStatus(err: unknown): number | undefined {
-  const e = err as { status?: number; response?: { status?: number } };
-  return e?.status ?? e?.response?.status;
 }

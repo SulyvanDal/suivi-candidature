@@ -4,7 +4,8 @@
 import { gmail } from "@googleapis/gmail";
 import { getAuthorizedClient } from "./auth.js";
 import { openDb } from "./db.js";
-import { gmailSource, httpStatus, syncNewMessages } from "./sync.js";
+import { httpStatus } from "./retry.js";
+import { gmailSource, syncNewMessages } from "./sync.js";
 
 const SHOWN = 20;
 

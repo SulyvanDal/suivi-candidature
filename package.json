@@ -8,6 +8,7 @@
     "list": "tsx src/list-recent.ts",
     "sync": "tsx src/sync-run.ts",
     "extract": "tsx src/extract-run.ts",
+    "filter": "tsx src/filter-run.ts",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
