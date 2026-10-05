@@ -8,6 +8,7 @@ import type { ExtractedMail } from "./extract.js";
 
 const mail = (overrides: Partial<ExtractedMail> = {}): ExtractedMail => ({
   id: "m1",
+  threadId: null,
   date: new Date("2026-10-05T08:30:00Z"),
   from: "Recrutement <jobs@exemple.com>",
   to: "moi@exemple.com",

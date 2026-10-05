@@ -3,6 +3,7 @@
 
 import { gmail } from "@googleapis/gmail";
 import { getAuthorizedClient } from "./auth.js";
+import { rebuildCandidatures } from "./candidatures.js";
 import { classifyMail, createClient, MODEL } from "./classify.js";
 import { openDb } from "./db.js";
 import { processMessage, type ProcessedMail } from "./pipeline.js";
@@ -51,6 +52,11 @@ try {
     const date = mail.date.toLocaleDateString("fr-FR");
     console.log(`  ${date}  ${result!.classification.type.padEnd(20)} ${mail.from.slice(0, 35).padEnd(35)} | ${mail.subject}`);
   }
+
+  // Candidatures recalculées à partir de tous les événements (#10).
+  const { candidatures } = rebuildCandidatures(db);
+  const toCheck = candidatures.filter((c) => c.toCheck).length;
+  console.log(`\n${candidatures.length} candidature(s) suivie(s)${toCheck ? `, ${toCheck} à vérifier` : ""} (détail : npm run candidatures).`);
 } finally {
   db.close();
 }

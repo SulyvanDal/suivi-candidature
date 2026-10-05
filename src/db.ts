@@ -49,6 +49,42 @@ const MIGRATIONS: string[] = [
   ALTER TABLE mail_results ADD COLUMN channel   TEXT;
   ALTER TABLE mail_results ADD COLUMN offer_url TEXT;
   `,
+  // 4 — Candidatures, recalculées à partir des événements (#10)
+  `
+  ALTER TABLE mail_results ADD COLUMN thread_id TEXT;
+
+  -- Recalculée entièrement à chaque synchronisation.
+  CREATE TABLE candidatures (
+    id              TEXT PRIMARY KEY,  -- gmail_id du premier mail : identifiant stable
+    company         TEXT,
+    job_title       TEXT,
+    location        TEXT,
+    channel         TEXT,
+    offer_url       TEXT,
+    status          TEXT NOT NULL,     -- Envoyée | Entretien | Offre | Refus
+    applied_at      TEXT NOT NULL,
+    last_event_at   TEXT NOT NULL,
+    last_event_type TEXT NOT NULL,
+    to_check        INTEGER NOT NULL DEFAULT 0
+  );
+
+  -- Rattachement de chaque mail lié à une candidature (recalculé aussi).
+  CREATE TABLE mail_links (
+    gmail_id       TEXT PRIMARY KEY,
+    candidature_id TEXT,               -- NULL = non rattaché
+    to_check       INTEGER NOT NULL DEFAULT 0
+  );
+
+  -- Corrections manuelles (#13) : jamais effacées, réappliquées après chaque recalcul.
+  CREATE TABLE corrections (
+    id         INTEGER PRIMARY KEY,
+    kind       TEXT NOT NULL,
+    target     TEXT NOT NULL,
+    field      TEXT,
+    value      TEXT,
+    created_at TEXT NOT NULL
+  );
+  `,
 ];
 
 /** Ouvre la base (en la créant si besoin) et applique les migrations manquantes. */
@@ -91,6 +127,7 @@ export function markProcessed(db: DatabaseSync, gmailId: string): void {
 
 export interface MailResult {
   gmailId: string;
+  threadId?: string | null;
   receivedAt: Date;
   sent: boolean;
   filterRule: string;
@@ -109,8 +146,8 @@ export function saveMailResult(db: DatabaseSync, r: MailResult): void {
   db.prepare(
     `INSERT OR REPLACE INTO mail_results
        (gmail_id, received_at, sent, filter_rule, filter_match, event_type, justification, model,
-        company, job_title, location, channel, offer_url, processed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        company, job_title, location, channel, offer_url, thread_id, processed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     r.gmailId,
     r.receivedAt.toISOString(),
@@ -125,6 +162,7 @@ export function saveMailResult(db: DatabaseSync, r: MailResult): void {
     r.location ?? null,
     r.channel ?? null,
     r.offerUrl ?? null,
+    r.threadId ?? null,
     new Date().toISOString(),
   );
 }

@@ -28,6 +28,7 @@ export async function processMessage(id: string, deps: PipelineDeps): Promise<Pr
 
   saveMailResult(deps.db, {
     gmailId: id,
+    threadId: mail.threadId,
     receivedAt: mail.date,
     sent: mail.sent,
     filterRule: decision.rule,

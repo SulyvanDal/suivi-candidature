@@ -41,6 +41,7 @@ lecture du corps des mails.
   (appelle Claude, ~0,18 $).
 - `npm run reanalyse` : repasse à Claude les mails déjà gardés par le pré-filtre et met la base
   à jour (appelle Claude, ~0,55 $). **Toujours demander confirmation avant toute commande payante.**
+- `npm run candidatures` : recalcule les candidatures et les affiche (gratuit, n'appelle pas Claude).
 - `npm test` : tests automatiques (`node:test`, fichiers `src/**/*.test.ts`).
 - `npm run typecheck` : vérification des types.
 
@@ -116,6 +117,12 @@ lecture du corps des mails.
   canal 5/5. Erreurs restantes : approche LinkedIn d'une recruteuse classée `entretien`, Hays
   (cabinet) sans entreprise.
   Ne pas sur-ajuster le prompt sur quelques mails : préférer une règle en aval (#10) ou #15.
+- Candidatures (`src/candidatures.ts`, #10) : **recalculées entièrement** à partir des événements
+  à chaque sync (tables `candidatures` et `mail_links`), identifiant stable = gmail_id du premier
+  mail. Rattachement : même fil Gmail → même entreprise + même poste (noms rapprochés, de
+  préférence candidature en cours ; entreprise inconnue → intitulé identique exigé) → sinon
+  création (sauf `autre`, non rattaché). Nouvel envoi après refus = nouvelle candidature.
+  Corrections manuelles : table `corrections`, à réappliquer après recalcul (#13).
 - `data/suivi.db` contient les **vraies données** depuis le premier passage du 05/10/2026
   (1 419 mails, 246 envoyés à Claude, 94 liés à une candidature, 0,49 $).
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est

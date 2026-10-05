@@ -12,6 +12,8 @@ type Part = gmail_v1.Schema$MessagePart;
 
 export interface ExtractedMail {
   id: string;
+  /** Fil de discussion Gmail. */
+  threadId: string | null;
   /** Date de réception par Gmail. */
   date: Date;
   from: string;
@@ -29,6 +31,7 @@ export function extractMail(message: gmail_v1.Schema$Message): ExtractedMail {
   const payload = message.payload ?? {};
   return {
     id: message.id ?? "",
+    threadId: message.threadId ?? null,
     date: new Date(Number(message.internalDate)),
     from: header(payload, "From"),
     to: header(payload, "To"),
