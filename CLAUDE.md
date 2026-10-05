@@ -125,7 +125,11 @@ lecture du corps des mails.
   création (sauf `autre`, non rattaché). Nouvel envoi après refus = nouvelle candidature.
   Corrections manuelles (table `corrections`, jamais effacée, relue à chaque recalcul ; la plus
   récente par mail l'emporte) : `creer` (le mail compte comme un envoi), `rattacher` (forcé, même
-  vers une candidature créée plus tard), `ignorer`. Écrites depuis la section « À classer » (#17).
+  vers une candidature créée plus tard), `ignorer`, écrites depuis la page « À classer » (#17) ;
+  `champ`, `statut` (option A : vaut jusqu'au prochain mail qui change le statut),
+  `pas_candidature`, écrites depuis la page d'une candidature (#18). Annulation = suppression de
+  la ligne, depuis la page « Corrections ». Fusion et retrait d'un mail : reportés (#19).
+  Principe utilisateur : ne développer que ce qui sert maintenant, noter le reste en issue.
 - Interface (`src/ui/`, #13 découpée en #16 consultation, #17 À classer, #18 édition) :
   **Hono + HTML généré côté serveur + htmx** (choix utilisateur ; migration vers React possible
   plus tard). `app.ts` (routes, testable via `app.request` sans serveur), `queries.ts` (lectures,

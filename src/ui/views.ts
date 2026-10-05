@@ -2,7 +2,7 @@
 // un objet de mail contenant du HTML s'affiche comme du texte, il ne s'exécute pas.
 
 import { html } from "hono/html";
-import type { CandidatureRow, DisplayStatus, MailRow, MailToClassify } from "./queries.js";
+import type { CandidatureRow, CorrectionRow, DisplayStatus, MailRow, MailToClassify } from "./queries.js";
 import { DISPLAY_STATUSES } from "./queries.js";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -129,9 +129,12 @@ export function listPage(all: CandidatureRow[], filter: DisplayStatus | null, to
           <h1>Mes candidatures</h1>
           <p class="sous-titre">${all.length} candidatures depuis le 1<sup>er</sup> juin</p>
         </div>
-        <a class="bouton bouton-a-classer${toClassifyCount === 0 ? " vide-a-classer" : ""}" href="/a-classer"
-          >À classer <span class="compteur">${toClassifyCount}</span></a
-        >
+        <div class="entete-actions">
+          <a class="bouton bouton-discret" href="/corrections">Corrections</a>
+          <a class="bouton bouton-a-classer${toClassifyCount === 0 ? " vide-a-classer" : ""}" href="/a-classer"
+            >À classer <span class="compteur">${toClassifyCount}</span></a
+          >
+        </div>
       </header>
       <div id="contenu">
         <nav class="filtres">
@@ -163,27 +166,72 @@ export function listPage(all: CandidatureRow[], filter: DisplayStatus | null, to
   );
 }
 
-/** Page d'une candidature : ses informations et ses mails. */
-export function detailPage(c: CandidatureRow, mails: MailRow[]) {
-  const field = (label: string, value: unknown) =>
-    html`<div class="info"><dt>${label}</dt><dd>${value ?? html`<span class="manquant">Non précisé</span>`}</dd></div>`;
+const EDIT_STATUSES = ["Envoyée", "Entretien", "Offre", "Refus"] as const;
+const modified = (c: CandidatureRow, key: string) =>
+  c.manual.includes(key) ? html`<span class="modifie" title="Corrigé à la main">modifié</span>` : "";
+
+/** Page d'une candidature : ses informations (éventuellement en mode modification) et ses mails. */
+export function detailPage(c: CandidatureRow, mails: MailRow[], editing = false) {
+  const field = (label: string, key: string, value: unknown) =>
+    html`<div class="info">
+      <dt>${label} ${modified(c, key)}</dt>
+      <dd>${value ?? html`<span class="manquant">Non précisé</span>`}</dd>
+    </div>`;
+  const input = (label: string, name: string, value: string | null) =>
+    html`<label class="info"
+      ><span class="libelle">${label}</span><input type="text" name="${name}" value="${value ?? ""}"
+    /></label>`;
+
+  const infos = editing
+    ? html`<form class="infos formulaire" method="post" action="/candidatures/${c.id}/modifier">
+        ${input("Entreprise", "company", c.company)} ${input("Poste", "jobTitle", c.jobTitle)}
+        ${input("Lieu", "location", c.location)} ${input("Canal", "channel", c.channel)}
+        ${input("Lien de l'offre", "offerUrl", c.offerUrl)}
+        <label class="info"
+          ><span class="libelle">Statut</span>
+          <select name="status">
+            ${EDIT_STATUSES.map((s) => html`<option value="${s}" ${s === c.rawStatus ? "selected" : ""}>${s}</option>`)}
+          </select>
+        </label>
+        <p class="aide-formulaire">
+          Un statut changé à la main vaut jusqu'au prochain mail qui change le statut. Laisse un champ vide pour
+          « non précisé ».
+        </p>
+        <div class="actions">
+          <button type="submit" class="bouton bouton-principal">Enregistrer</button>
+          <a class="bouton bouton-discret" href="/candidatures/${c.id}">Annuler</a>
+        </div>
+      </form>`
+    : html`<dl class="infos">
+          ${field("Candidature", "", longDate(c.appliedAt))} ${field("Lieu", "location", c.location)}
+          ${field("Canal", "channel", c.channel)}
+          ${field("Offre", "offerUrl", c.offerUrl ? html`<a href="${c.offerUrl}" rel="noreferrer">Voir l'annonce</a>` : null)}
+        </dl>
+        <div class="actions actions-detail">
+          <a class="bouton" href="/candidatures/${c.id}/modifier">Modifier</a>
+          <form
+            method="post"
+            action="/candidatures/${c.id}/pas-candidature"
+            onsubmit="return confirm('Retirer cette candidature et ignorer ses mails ? (annulable depuis la page Corrections)')"
+          >
+            <button type="submit" class="bouton bouton-discret">Ce n'est pas une candidature</button>
+          </form>
+        </div>`;
+
   return layout(
     `${c.company ?? "Candidature"} · ${c.jobTitle ?? ""}`,
     html`<p class="retour"><a href="/">← Mes candidatures</a></p>
       <header class="entete">
         <div class="titre-detail">
           <h1>${c.company ?? "Entreprise inconnue"}</h1>
-          ${badge(c.status)}
+          ${badge(c.status)} ${modified(c, "status")} ${modified(c, "company")}
         </div>
-        <p class="sous-titre">${c.jobTitle ?? "Poste non précisé"}</p>
+        <p class="sous-titre">${c.jobTitle ?? "Poste non précisé"} ${modified(c, "jobTitle")}</p>
       </header>
       ${c.toCheck
         ? html`<p class="alerte">Un mail au moins a été rattaché par défaut à cette candidature : à vérifier.</p>`
         : ""}
-      <dl class="infos">
-        ${field("Candidature", longDate(c.appliedAt))} ${field("Lieu", c.location)} ${field("Canal", c.channel)}
-        ${field("Offre", c.offerUrl ? html`<a href="${c.offerUrl}" rel="noreferrer">Voir l'annonce</a>` : null)}
-      </dl>
+      ${infos}
       <h2>Historique</h2>
       <ol class="historique">
         ${mails.map(
@@ -200,6 +248,35 @@ export function detailPage(c: CandidatureRow, mails: MailRow[]) {
           </li>`,
         )}
       </ol>`,
+  );
+}
+
+/** Page des corrections manuelles, avec annulation. */
+export function correctionsPage(corrections: CorrectionRow[]) {
+  return layout(
+    "Corrections",
+    html`<p class="retour"><a href="/">← Mes candidatures</a></p>
+      <header class="entete">
+        <h1>Corrections</h1>
+        <p class="sous-titre">
+          Tes décisions manuelles, la plus récente en premier. Annuler une correction rétablit le classement automatique.
+        </p>
+      </header>
+      ${corrections.length === 0
+        ? html`<p class="vide">Aucune correction.</p>`
+        : html`<ul class="liste" hx-boost="true">
+            ${corrections.map(
+              (k) => html`<li class="correction">
+                <div>
+                  <div>${k.description}</div>
+                  <div class="mail-date">${longDate(k.createdAt)}</div>
+                </div>
+                <form method="post" action="/corrections/${k.id}/annuler">
+                  <button type="submit" class="bouton bouton-discret">Annuler</button>
+                </form>
+              </li>`,
+            )}
+          </ul>`}`,
   );
 }
 

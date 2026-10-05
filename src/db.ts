@@ -90,6 +90,10 @@ const MIGRATIONS: string[] = [
   ALTER TABLE mail_results ADD COLUMN subject       TEXT;
   ALTER TABLE mail_results ADD COLUMN correspondent TEXT;  -- expéditeur (reçu) ou destinataire (envoyé)
   `,
+  // 6 — Informations corrigées à la main, pour les signaler dans l'interface (#18)
+  `
+  ALTER TABLE candidatures ADD COLUMN manual TEXT NOT NULL DEFAULT '';  -- ex. "company,status"
+  `,
 ];
 
 /** Ouvre la base (en la créant si besoin) et applique les migrations manquantes. */

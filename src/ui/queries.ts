@@ -23,6 +23,10 @@ export interface CandidatureRow {
   channel: string | null;
   offerUrl: string | null;
   status: DisplayStatus;
+  /** Statut enregistré (sans « Sans réponse »), pour le formulaire de modification. */
+  rawStatus: Status;
+  /** Informations corrigées à la main : company, jobTitle, location, channel, offerUrl, status. */
+  manual: string[];
   appliedAt: Date;
   lastEventAt: Date;
   lastEventType: string;
@@ -54,6 +58,8 @@ function toCandidature(r: Row, now: Date): CandidatureRow {
     channel: r.channel as string | null,
     offerUrl: r.offer_url as string | null,
     status: displayStatus(r.status as Status, lastEventAt, now),
+    rawStatus: r.status as Status,
+    manual: r.manual ? String(r.manual).split(",") : [],
     appliedAt: new Date(r.applied_at as string),
     lastEventAt,
     lastEventType: r.last_event_type as string,
@@ -131,4 +137,64 @@ export function listToClassify(db: DatabaseSync): MailToClassify[] {
     subject: r.subject as string | null,
     company: r.company as string | null,
   }));
+}
+
+export interface CorrectionRow {
+  id: number;
+  createdAt: Date;
+  description: string;
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  company: "entreprise",
+  jobTitle: "poste",
+  location: "lieu",
+  channel: "canal",
+  offerUrl: "lien de l'offre",
+};
+
+/** Toutes les corrections manuelles, la plus récente en premier, décrites en clair. */
+export function listCorrections(db: DatabaseSync): CorrectionRow[] {
+  const rows = db
+    .prepare(
+      `SELECT k.id, k.kind, k.target, k.field, k.value, k.created_at,
+              m.subject AS mail_subject,
+              t.company AS target_company, t.job_title AS target_job,
+              v.company AS value_company, v.job_title AS value_job
+       FROM corrections k
+       LEFT JOIN mail_results m ON m.gmail_id = k.target
+       LEFT JOIN candidatures t ON t.id = k.target
+       LEFT JOIN candidatures v ON v.id = k.value
+       ORDER BY k.id DESC`,
+    )
+    .all() as Row[];
+  const name = (company: unknown, job: unknown) =>
+    company || job ? `${company ?? "Entreprise inconnue"}${job ? ` · ${job}` : ""}` : "candidature introuvable";
+  const mail = (r: Row) => `le mail « ${r.mail_subject || "sans objet"} »`;
+  return rows.map((r) => {
+    let description: string;
+    switch (r.kind) {
+      case "creer":
+        description = `Candidature créée à partir du mail « ${r.mail_subject || "sans objet"} »`;
+        break;
+      case "rattacher":
+        description = `${mail(r)} rattaché à ${name(r.value_company, r.value_job)}`;
+        break;
+      case "ignorer":
+        description = `${mail(r)} ignoré`;
+        break;
+      case "champ":
+        description = `${name(r.target_company, r.target_job)} : ${FIELD_LABELS[r.field as string] ?? r.field} → ${r.value ?? "vide"}`;
+        break;
+      case "statut":
+        description = `${name(r.target_company, r.target_job)} : statut → ${r.value}`;
+        break;
+      case "pas_candidature":
+        description = `${r.value ?? "Candidature"} : ce n'est pas une candidature`;
+        break;
+      default:
+        description = `Correction ${r.kind}`;
+    }
+    return { id: r.id as number, createdAt: new Date(r.created_at as string), description: description[0].toUpperCase() + description.slice(1) };
+  });
 }

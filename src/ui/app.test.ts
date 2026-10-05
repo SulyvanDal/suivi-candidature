@@ -160,3 +160,51 @@ test("mail ou action inconnus : 404", async () => {
   assert.equal((await post(app, "/a-classer/inconnu/creer")).status, 404);
   assert.equal((await post(app, "/a-classer/x1/supprimer")).status, 404);
 });
+
+// --- Édition (#18) ---
+
+test("modifier : seules les informations changées deviennent des corrections, signalées « modifié »", async () => {
+  const app = setup();
+  const form = { company: "Exemple", jobTitle: "Product Owner", location: "Bordeaux", channel: "", offerUrl: "", status: "Envoyée" };
+  assert.equal((await post(app, "/candidatures/a1/modifier", form)).status, 303);
+
+  const corrections = await (await app.request("/corrections")).text();
+  assert.equal(corrections.match(/class="correction"/g)?.length, 1, "seul le lieu a changé");
+  assert.match(corrections, /lieu → Bordeaux/);
+
+  const detail = await (await app.request("/candidatures/a1")).text();
+  assert.match(detail, /Bordeaux/);
+  assert.match(detail, /Lieu <span class="modifie"/);
+});
+
+test("modifier le statut : affiché et signalé comme modifié", async () => {
+  const app = setup();
+  const form = { company: "Exemple", jobTitle: "Product Owner", location: "", channel: "", offerUrl: "", status: "Entretien" };
+  await post(app, "/candidatures/a1/modifier", form);
+  const detail = await (await app.request("/candidatures/a1")).text();
+  assert.match(detail, /badge-entretien/);
+});
+
+test("formulaire de modification : pré-rempli avec le statut courant", async () => {
+  const body = await (await setup().request("/candidatures/c1/modifier")).text();
+  assert.match(body, /name="company" value="Piège"/);
+  assert.match(body, /<option value="Refus" selected>/);
+});
+
+test("« ce n'est pas une candidature » puis annulation depuis la page Corrections", async () => {
+  const app = setup();
+  assert.equal((await post(app, "/candidatures/c1/pas-candidature")).status, 303);
+  assert.doesNotMatch(listPart(await (await app.request("/")).text()), /Piège/);
+
+  const corrections = await (await app.request("/corrections")).text();
+  assert.match(corrections, /Piège · Product Owner : ce n&#39;est pas une candidature|Piège · Product Owner : ce n'est pas une candidature/);
+  const id = corrections.match(/\/corrections\/(\d+)\/annuler/)![1];
+
+  assert.equal((await post(app, `/corrections/${id}/annuler`)).status, 303);
+  assert.match(listPart(await (await app.request("/")).text()), /Piège/);
+  assert.match(await (await app.request("/corrections")).text(), /Aucune correction/);
+});
+
+test("annuler une correction inconnue : 404", async () => {
+  assert.equal((await post(setup(), "/corrections/999/annuler")).status, 404);
+});

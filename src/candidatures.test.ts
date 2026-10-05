@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   addCorrection,
   buildCandidatures,
+  cancelCorrection,
   rebuildCandidatures,
   sameCompany,
   sameJob,
@@ -242,4 +243,75 @@ test("critère #17 : une décision manuelle survit aux recalculs, la plus récen
     { gmail_id: "s1", candidature_id: "s1" },
     { gmail_id: "s2", candidature_id: "s1" },
   ]);
+});
+
+// --- Édition (#18) ---
+
+test("champ corrigé à la main : remplace la valeur extraite et est signalé", () => {
+  const { candidatures } = buildCandidatures([ev({ day: 1, company: null, gmailId: "h" })], [
+    { kind: "champ", candidatureId: "h", field: "company", value: "Hays" },
+  ]);
+  assert.equal(candidatures[0].company, "Hays");
+  assert.deepEqual(candidatures[0].manual, ["company"]);
+});
+
+test("statut manuel (option A) : vaut tant qu'aucun mail plus récent ne change le statut", () => {
+  const events = [ev({ day: 1, gmailId: "c" })];
+  const manual = { kind: "statut" as const, candidatureId: "c", value: "Entretien" as const, at: new Date(Date.UTC(2026, 6, 5)) };
+
+  const before = buildCandidatures(events, [manual]).candidatures[0];
+  assert.equal(before.status, "Entretien");
+  assert.ok(before.manual.includes("status"));
+
+  const after = buildCandidatures([...events, ev({ day: 10, type: "refus" })], [manual]).candidatures[0];
+  assert.equal(after.status, "Refus", "le refus arrivé après la correction reprend la main");
+  assert.ok(!after.manual.includes("status"));
+});
+
+test("statut manuel : un mail « autre » plus récent ne l'annule pas", () => {
+  const { candidatures } = buildCandidatures(
+    [ev({ day: 1, gmailId: "c" }), ev({ day: 10, type: "autre" })],
+    [{ kind: "statut", candidatureId: "c", value: "Refus", at: new Date(Date.UTC(2026, 6, 5)) }],
+  );
+  assert.equal(candidatures[0].status, "Refus");
+});
+
+test("« ce n'est pas une candidature » : elle disparaît avec ses mails, y compris les suivants", () => {
+  const { candidatures, links } = buildCandidatures(
+    [ev({ day: 1, company: "CESI", gmailId: "cesi1", type: "entretien" }), ev({ day: 5, company: "CESI", gmailId: "cesi2", type: "autre" }), ev({ day: 2, company: "Autre", gmailId: "ok" })],
+    [{ kind: "pas_candidature", candidatureId: "cesi1" }],
+  );
+  assert.deepEqual(candidatures.map((c) => c.id), ["ok"]);
+  assert.equal(links.has("cesi1"), false);
+  assert.equal(links.has("cesi2"), false);
+});
+
+test("correction sur une candidature disparue : sans effet, pas d'erreur", () => {
+  const { candidatures } = buildCandidatures([ev({ day: 1, gmailId: "a" })], [
+    { kind: "champ", candidatureId: "fantome", field: "company", value: "X" },
+  ]);
+  assert.equal(candidatures[0].company, "Exemple");
+});
+
+test("critère #18 : une correction survit aux recalculs, et l'annuler rétablit l'automatique", () => {
+  const db = openDb(":memory:");
+  saveMailResult(db, {
+    gmailId: "h",
+    receivedAt: new Date("2026-07-14"),
+    sent: false,
+    filterRule: "mot-cle",
+    eventType: "candidature_envoyee",
+    company: null,
+    jobTitle: "Chef de projet informatique",
+  });
+  addCorrection(db, { kind: "champ", candidatureId: "h", field: "company", value: "Hays" });
+  rebuildCandidatures(db);
+  rebuildCandidatures(db);
+  const row = () => ({ ...(db.prepare("SELECT company, manual FROM candidatures WHERE id = 'h'").get() as object) });
+  assert.deepEqual(row(), { company: "Hays", manual: "company" });
+
+  const { id } = db.prepare("SELECT id FROM corrections").get() as { id: number };
+  assert.equal(cancelCorrection(db, id), true);
+  rebuildCandidatures(db);
+  assert.deepEqual(row(), { company: null, manual: "" });
 });

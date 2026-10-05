@@ -228,6 +228,37 @@ select { max-width: 280px; padding-right: 8px; }
 .bouton-principal:hover { background: var(--accent); filter: brightness(1.08); }
 .bouton-discret { border-color: transparent; background: transparent; color: var(--discret); }
 
+/* Édition (#18) */
+.entete-actions { display: flex; flex-shrink: 0; gap: 8px; margin-top: 8px; }
+.entete-actions .bouton-a-classer { margin-top: 0; }
+.modifie {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-douce);
+  color: var(--discret);
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  vertical-align: middle;
+}
+.actions-detail { margin-top: 16px; }
+.formulaire .info { display: flex; flex-direction: column; gap: 4px; }
+.libelle { color: var(--discret); font-size: 0.85rem; }
+.formulaire input, .formulaire select {
+  padding: 8px 12px;
+  border: 1px solid var(--bordure);
+  border-radius: 10px;
+  background: var(--fond);
+  color: var(--texte);
+  font: inherit;
+  max-width: none;
+}
+.formulaire input:focus, .formulaire select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.aide-formulaire { grid-column: 1 / -1; margin: 0; color: var(--discret); font-size: 0.88rem; }
+.formulaire .actions { grid-column: 1 / -1; margin-top: 0; }
+.correction { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; }
+.correction form { margin: 0; }
+
 @media (max-width: 640px) {
   main { padding: 32px 16px 64px; }
   h1 { font-size: 1.9rem; }
