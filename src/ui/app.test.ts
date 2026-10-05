@@ -126,7 +126,8 @@ test("créer une candidature : le mail quitte « À classer » et la candidature
   assert.equal(res.status, 303);
   assert.equal(res.headers.get("location"), "/", "plus rien à classer : retour à la liste");
   const body = await (await app.request("/")).text();
-  assert.doesNotMatch(body, /À classer/);
+  assert.match(body, /href="\/a-classer"[^>]*>À classer <span class="compteur">0<\/span>/, "bouton toujours visible");
+  assert.match(await (await app.request("/a-classer")).text(), /0 mail à classer/);
   assert.match(listPart(body), /href="\/candidatures\/x1">[\s\S]*?Immersion SA/);
 });
 
@@ -145,7 +146,7 @@ test("ignorer : le mail disparaît sans créer de candidature", async () => {
   const app = setup();
   await post(app, "/a-classer/x1/ignorer");
   const body = await (await app.request("/")).text();
-  assert.doesNotMatch(body, /À classer/);
+  assert.match(body, /À classer <span class="compteur">0<\/span>/);
   assert.match(body, /Toutes <span class="compteur">3<\/span>/);
 });
 

@@ -201,6 +201,8 @@ h2 {
   color: var(--sans-reponse);
   font-weight: 600;
 }
+/* Rien à classer : bouton présent mais neutre. */
+.bouton-a-classer.vide-a-classer { border-color: var(--bordure); background: var(--surface); color: var(--discret); font-weight: 400; }
 .bouton-a-classer:hover { text-decoration: none; background: var(--sans-reponse-fond); filter: brightness(0.97); }
 .a-classer .liste { box-shadow: 0 0 0 1px var(--sans-reponse-fond), 0 1px 2px rgb(60 40 20 / 0.06); }
 .aide { margin: -8px 0 16px; color: var(--discret); font-size: 0.95rem; }

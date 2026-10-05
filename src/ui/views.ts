@@ -65,7 +65,7 @@ export function toClassifyPage(mails: MailToClassify[], candidatures: Candidatur
       </p>
     </header>
     ${mails.length === 0
-      ? html`<p class="vide">Tout est classé.</p>`
+      ? html`<p class="vide">0 mail à classer : tout est classé.</p>`
       : html`<section class="a-classer" hx-boost="true"><ul class="liste">
       ${mails.map(
         (m) => html`<li class="mail-a-classer">
@@ -129,11 +129,9 @@ export function listPage(all: CandidatureRow[], filter: DisplayStatus | null, to
           <h1>Mes candidatures</h1>
           <p class="sous-titre">${all.length} candidatures depuis le 1<sup>er</sup> juin</p>
         </div>
-        ${toClassifyCount > 0
-          ? html`<a class="bouton bouton-a-classer" href="/a-classer"
-              >À classer <span class="compteur">${toClassifyCount}</span></a
-            >`
-          : ""}
+        <a class="bouton bouton-a-classer${toClassifyCount === 0 ? " vide-a-classer" : ""}" href="/a-classer"
+          >À classer <span class="compteur">${toClassifyCount}</span></a
+        >
       </header>
       <div id="contenu">
         <nav class="filtres">
