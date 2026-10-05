@@ -11,6 +11,10 @@ Cible à terme :
 Gmail (nouveaux mails) → filtrage → extraction du texte → API Claude (classement / extraction) → base de données
 ```
 
+Besoin fonctionnel (champs, statuts, mails pris en compte, premier passage depuis le
+01/06/2026, consultation) : [docs/fiche-fonctionnelle.md](docs/fiche-fonctionnelle.md).
+S'y référer avant toute issue qui touche au fonctionnel.
+
 ## Phase actuelle : prototype d'accès Gmail (jetable)
 
 Seul objectif : prouver que du code TypeScript peut s'authentifier sur le compte Gmail
@@ -85,9 +89,10 @@ lecture du corps des mails.
 
 Suivie dans les issues GitHub (`gh issue list`) :
 
-1. Spécification : #1 fiche fonctionnelle
+1. Spécification : #1 fiche fonctionnelle (terminée)
 2. Accès Gmail durable : #2 constater l'expiration en mode Test, #3 passer En production
 3. Synchronisation : #4 stockage SQLite, #5 synchronisation incrémentale (`historyId`)
 4. Extraction du texte : #6 corps des mails → texte, #7 pré-filtre
 5. Analyse par Claude : #8 classification, #9 extraction structurée, #10 rattachement aux candidatures
-6. Restitution et automatisation : #11 affichage du suivi, #12 exécution quotidienne (`launchd`)
+6. Restitution et automatisation : #11 tableau dans le terminal, #12 exécution quotidienne (`launchd`),
+   #13 interface avec édition manuelle
