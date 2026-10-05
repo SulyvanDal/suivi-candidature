@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { csrf } from "hono/csrf";
 import { addCorrection, rebuildCandidatures } from "../candidatures.js";
 import { DISPLAY_STATUSES, type DisplayStatus, getCandidature, listCandidatures, listToClassify } from "./queries.js";
-import { detailPage, listPage, notFoundPage } from "./views.js";
+import { detailPage, listPage, notFoundPage, toClassifyPage } from "./views.js";
 
 // htmx est servi depuis node_modules : la page ne charge rien depuis Internet.
 const HTMX = readFileSync("node_modules/htmx.org/dist/htmx.min.js", "utf8");
@@ -22,8 +22,10 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date()):
   app.get("/", (c) => {
     const statut = c.req.query("statut");
     const filter = DISPLAY_STATUSES.includes(statut as DisplayStatus) ? (statut as DisplayStatus) : null;
-    return c.html(listPage(listCandidatures(db, now()), filter, listToClassify(db)));
+    return c.html(listPage(listCandidatures(db, now()), filter, listToClassify(db).length));
   });
+
+  app.get("/a-classer", (c) => c.html(toClassifyPage(listToClassify(db), listCandidatures(db, now()))));
 
   // Classement manuel d'un mail (#17) : la décision est enregistrée, puis tout est recalculé.
   app.post("/a-classer/:id/:action", async (c) => {
@@ -43,7 +45,8 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date()):
       return c.text("Action inconnue", 404);
     }
     rebuildCandidatures(db);
-    return c.redirect("/", 303);
+    // On reste sur la page tant qu'il reste des mails à classer.
+    return c.redirect(listToClassify(db).length > 0 ? "/a-classer" : "/", 303);
   });
 
   app.get("/candidatures/:id", (c) => {

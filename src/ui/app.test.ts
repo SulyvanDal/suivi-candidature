@@ -107,9 +107,14 @@ test("htmx et la feuille de style sont servis localement", async () => {
 
 // --- À classer (#17) ---
 
-test("section « À classer » : affichée avec le mail et la liste des candidatures", async () => {
+test("bouton « À classer » sur la page principale, qui ne liste pas les mails elle-même", async () => {
   const body = await (await setup().request("/")).text();
-  assert.match(body, /À classer <span class="compteur">1<\/span>/);
+  assert.match(body, /href="\/a-classer"[^>]*>À classer <span class="compteur">1<\/span>/);
+  assert.doesNotMatch(body, /Demande d/);
+});
+
+test("page « À classer » : le mail et la liste des candidatures pour le rattacher", async () => {
+  const body = await (await setup().request("/a-classer")).text();
   assert.match(body, /Demande d&#39;immersion|Demande d'immersion/);
   assert.match(body, /action="\/a-classer\/x1\/creer"/);
   assert.match(body, /<option value="c1">/);
@@ -119,6 +124,7 @@ test("créer une candidature : le mail quitte « À classer » et la candidature
   const app = setup();
   const res = await post(app, "/a-classer/x1/creer");
   assert.equal(res.status, 303);
+  assert.equal(res.headers.get("location"), "/", "plus rien à classer : retour à la liste");
   const body = await (await app.request("/")).text();
   assert.doesNotMatch(body, /À classer/);
   assert.match(listPart(body), /href="\/candidatures\/x1">[\s\S]*?Immersion SA/);

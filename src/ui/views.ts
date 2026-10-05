@@ -48,20 +48,25 @@ function layout(title: string, body: unknown) {
     </html>`;
 }
 
-/** Mails à classer à la main (#17) : affiché seulement s'il y en a. */
-function toClassifySection(mails: MailToClassify[], candidatures: CandidatureRow[]) {
-  if (mails.length === 0) return "";
+/** Page des mails à classer à la main (#17), ouverte depuis le bouton de la page principale. */
+export function toClassifyPage(mails: MailToClassify[], candidatures: CandidatureRow[]) {
   const options = [...candidatures].sort((a, b) =>
     (a.company ?? "").localeCompare(b.company ?? "", "fr", { sensitivity: "base" }),
   );
   // hx-boost : les formulaires sont envoyés sans recharger toute la page (et marchent sans JavaScript).
-  return html`<section class="a-classer" hx-boost="true">
-    <h2>À classer <span class="compteur">${mails.length}</span></h2>
-    <p class="aide">
-      Ces mails concernent une démarche, mais aucune candidature ne leur correspond. Crée une candidature, rattache-les
-      à une existante, ou ignore-les.
-    </p>
-    <ul class="liste">
+  return layout(
+    "À classer",
+    html`<p class="retour"><a href="/">← Mes candidatures</a></p>
+    <header class="entete">
+      <h1>À classer</h1>
+      <p class="sous-titre">
+        Ces mails concernent une démarche, mais aucune candidature ne leur correspond. Crée une candidature,
+        rattache-les à une existante, ou ignore-les.
+      </p>
+    </header>
+    ${mails.length === 0
+      ? html`<p class="vide">Tout est classé.</p>`
+      : html`<section class="a-classer" hx-boost="true"><ul class="liste">
       ${mails.map(
         (m) => html`<li class="mail-a-classer">
           <div class="ligne-principale">
@@ -94,16 +99,12 @@ function toClassifySection(mails: MailToClassify[], candidatures: CandidatureRow
           </div>
         </li>`,
       )}
-    </ul>
-  </section>`;
+    </ul></section>`}`,
+  );
 }
 
-/** Page principale : mails à classer, filtres par statut et liste aérée. */
-export function listPage(
-  all: CandidatureRow[],
-  filter: DisplayStatus | null,
-  toClassify: MailToClassify[] = [],
-) {
+/** Page principale : filtres par statut et liste aérée ; bouton vers les mails à classer. */
+export function listPage(all: CandidatureRow[], filter: DisplayStatus | null, toClassifyCount = 0) {
   const rows = filter ? all.filter((c) => c.status === filter) : all;
   const count = (s: DisplayStatus) => all.filter((c) => c.status === s).length;
   // Les filtres remplacent seulement #contenu (htmx), et fonctionnent aussi sans JavaScript.
@@ -123,11 +124,17 @@ export function listPage(
 
   return layout(
     "Mes candidatures",
-    html`<header class="entete">
-        <h1>Mes candidatures</h1>
-        <p class="sous-titre">${all.length} candidatures depuis le 1<sup>er</sup> juin</p>
+    html`<header class="entete entete-liste">
+        <div>
+          <h1>Mes candidatures</h1>
+          <p class="sous-titre">${all.length} candidatures depuis le 1<sup>er</sup> juin</p>
+        </div>
+        ${toClassifyCount > 0
+          ? html`<a class="bouton bouton-a-classer" href="/a-classer"
+              >À classer <span class="compteur">${toClassifyCount}</span></a
+            >`
+          : ""}
       </header>
-      ${toClassifySection(toClassify, all)}
       <div id="contenu">
         <nav class="filtres">
           ${filterLink("Toutes", null, all.length)}
