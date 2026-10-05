@@ -31,6 +31,7 @@ lecture du corps des mails.
 ## Commandes
 
 - `npm run list` : liste les mails des dernières 24 h (lance l'autorisation si nécessaire).
+- `npm test` : tests automatiques (`node:test`, fichiers `src/**/*.test.ts`).
 - `npm run typecheck` : vérification des types.
 
 ## Contraintes
@@ -75,6 +76,9 @@ lecture du corps des mails.
 - Filtre des 24 h : `q = "after:<horodatage Unix>"`, avec pagination.
 - Module d'authentification (`src/auth.ts`) écrit pour être réutilisé par l'application complète.
 - Exécution TypeScript via `tsx`.
+- Base locale : `node:sqlite` (intégré à Node), fichier `data/suivi.db` (exclu de git),
+  module `src/db.ts`. Le schéma évolue par migrations versionnées avec `PRAGMA user_version` :
+  ne jamais modifier une migration livrée, en ajouter une à la fin.
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est
   affichée dans le terminal que si l'ouverture échoue.
 

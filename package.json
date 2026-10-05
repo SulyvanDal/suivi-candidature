@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "list": "tsx src/list-recent.ts",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "repository": {

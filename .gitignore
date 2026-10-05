@@ -1,5 +1,8 @@
 # Identifiants OAuth et jetons : ne jamais commiter
 secrets/
 
+# Base de données locale : données personnelles
+data/
+
 node_modules/
 .DS_Store
