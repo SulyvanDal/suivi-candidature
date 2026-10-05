@@ -47,8 +47,13 @@ lecture du corps des mails.
 
 ## Façon de travailler
 
-- Avant d'écrire du code pour une nouvelle étape, expliquer l'approche et
+- Le travail est découpé en **petits blocs = une issue GitHub chacun**, regroupés par
+  feature dans des milestones (voir la [feuille de route](#feuille-de-route)).
+  Traiter une issue à la fois, dans l'ordre des dépendances indiquées.
+- Avant d'écrire du code pour une issue, expliquer l'approche et
   **attendre la validation de l'utilisateur**.
+- Les commits référencent l'issue concernée (`Refs #4`, ou `Closes #4` quand elle est terminée).
+- Label `pour moi` : tâche ou décision de l'utilisateur. Label `code` : développement.
 - Répartition :
   - l'utilisateur gère la console Google Cloud (projet, activation de l'API,
     écran de consentement, création des identifiants) ;
@@ -76,9 +81,13 @@ lecture du corps des mails.
   Pour l'application complète, envisager le passage **En production sans validation**,
   qui supprime l'expiration des 7 jours (à vérifier dans la console le moment venu).
 
-## Pistes pour l'application complète
+## Feuille de route
 
-- Remplacer la fenêtre « 24 h » par un suivi incrémental (`historyId` / `users.history.list`)
-  et mémoriser les identifiants déjà traités.
-- Filtrer les mails avant envoi à Claude (coût et confidentialité).
-- Extraire proprement le texte des mails HTML / multipart.
+Suivie dans les issues GitHub (`gh issue list`) :
+
+1. Spécification : #1 fiche fonctionnelle
+2. Accès Gmail durable : #2 constater l'expiration en mode Test, #3 passer En production
+3. Synchronisation : #4 stockage SQLite, #5 synchronisation incrémentale (`historyId`)
+4. Extraction du texte : #6 corps des mails → texte, #7 pré-filtre
+5. Analyse par Claude : #8 classification, #9 extraction structurée, #10 rattachement aux candidatures
+6. Restitution et automatisation : #11 affichage du suivi, #12 exécution quotidienne (`launchd`)
