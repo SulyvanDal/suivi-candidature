@@ -33,6 +33,7 @@ lecture du corps des mails.
 - `npm run list` : liste les mails des dernières 24 h (lance l'autorisation si nécessaire).
 - `npm run sync` : synchronisation incrémentale (premier passage depuis le 01/06/2026, puis
   `historyId`) ; affiche le nombre de nouveaux mails et les en-têtes des 20 plus récents.
+- `npm run extract -- <id>` : affiche le texte extrait d'un mail.
 - `npm test` : tests automatiques (`node:test`, fichiers `src/**/*.test.ts`).
 - `npm run typecheck` : vérification des types.
 
@@ -85,6 +86,11 @@ lecture du corps des mails.
   traité qu'après succès, le historyId n'est enregistré qu'en fin de passage ; 404 sur
   `history.list` → rattrapage par date (dernière synchro − 1 jour). Spams, corbeille et
   brouillons exclus, mails envoyés gardés. Gmail est injecté (`MailSource`) pour les tests.
+- Extraction du texte (`src/extract.ts`, `html-to-text`) : `text/plain` préféré sauf s'il fait
+  moins de 200 caractères ; HTML glissé dans `text/plain` par certains ATS converti ; URLs de plus
+  de 100 caractères (liens de suivi) raccourcies à leur domaine ; `multipart/report` (mail non
+  distribué) réduit à sa première partie. Citations des réponses conservées (à traiter dans #8).
+  Tests sur des mails fabriqués uniquement : ne jamais commiter de vrais mails.
 - ⚠️ `data/suivi.db` est une **base de test** tant que l'analyse n'existe pas : les mails y sont
   marqués traités sans analyse. **La supprimer avant de brancher l'analyse Claude (#8).**
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est
