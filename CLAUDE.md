@@ -129,7 +129,8 @@ lecture du corps des mails.
   plus tard). `app.ts` (routes, testable via `app.request` sans serveur), `queries.ts` (lectures,
   statut « Sans réponse » calculé à l'affichage : Envoyée + rien depuis 21 jours), `views.ts`
   (gabarit `html` de Hono, échappement automatique), `server.ts` (127.0.0.1 uniquement).
-  htmx servi depuis node_modules : aucune ressource chargée depuis Internet.
+  htmx servi depuis node_modules : aucune ressource chargée depuis Internet. Style validé par
+  l'utilisateur : doux et chaleureux (beige, sauge, terracotta), polices Apple, liste aérée.
 - `data/suivi.db` contient les **vraies données** depuis le premier passage du 05/10/2026
   (1 419 mails, 246 envoyés à Claude, 94 liés à une candidature, 0,49 $).
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est
