@@ -191,8 +191,35 @@ h2 {
 .mail-justification { margin: 8px 0; color: var(--discret); font-size: 0.92rem; font-style: italic; }
 .mail-lien { font-size: 0.9rem; }
 
+/* À classer (#17) */
+.a-classer { margin-bottom: 40px; }
+.a-classer h2 { margin-top: 0; }
+.a-classer .liste { box-shadow: 0 0 0 1px var(--sans-reponse-fond), 0 1px 2px rgb(60 40 20 / 0.06); }
+.aide { margin: -8px 0 16px; color: var(--discret); font-size: 0.95rem; }
+.mail-a-classer { padding: 18px 24px; }
+.mail-a-classer .mail-date { margin-left: auto; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.actions form { margin: 0; }
+.rattacher { display: flex; gap: 6px; }
+
+.bouton, select {
+  padding: 6px 14px;
+  border: 1px solid var(--bordure);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--texte);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+select { max-width: 280px; padding-right: 8px; }
+.bouton:hover { background: var(--surface-douce); }
+.bouton-principal { border-color: var(--accent); background: var(--accent); color: var(--surface); }
+.bouton-principal:hover { background: var(--accent); filter: brightness(1.08); }
+.bouton-discret { border-color: transparent; background: transparent; color: var(--discret); }
+
 @media (max-width: 640px) {
   main { padding: 32px 16px 64px; }
   h1 { font-size: 1.9rem; }
-  .ligne { padding: 16px; }
+  .ligne, .mail-a-classer { padding: 16px; }
 }

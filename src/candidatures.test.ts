@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildCandidatures, rebuildCandidatures, sameCompany, sameJob, type CandidatureEvent } from "./candidatures.js";
+import {
+  addCorrection,
+  buildCandidatures,
+  rebuildCandidatures,
+  sameCompany,
+  sameJob,
+  type CandidatureEvent,
+} from "./candidatures.js";
 import { openDb, saveMailResult } from "./db.js";
 
 // Événements fabriqués : aucune vraie donnée.
@@ -165,4 +172,74 @@ test("recalcul en base : remplace les tables calculées, sans doublon au second 
   const rows = db.prepare("SELECT id, status FROM candidatures").all();
   assert.deepEqual(rows.map((r) => ({ ...r })), [{ id: "a", status: "Refus" }]);
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM mail_links").get() as { n: number }).n, 2);
+});
+
+// --- Corrections manuelles (#17) ---
+
+test("créer une candidature à partir d'un mail « autre » : les mails suivants de l'entreprise s'y rattachent", () => {
+  const events = [
+    ev({ day: 1, type: "autre", company: "Skysoft", jobTitle: null, gmailId: "s1" }),
+    ev({ day: 3, type: "autre", company: "SkySoft-ATM", jobTitle: null, gmailId: "s2" }),
+    ev({ day: 9, type: "autre", company: "Skysoft", jobTitle: null, gmailId: "s3" }),
+  ];
+  const { candidatures, links } = buildCandidatures(events, [{ kind: "creer", gmailId: "s1" }]);
+  assert.equal(candidatures.length, 1);
+  assert.equal(candidatures[0].id, "s1");
+  assert.equal(candidatures[0].status, "Envoyée");
+  assert.deepEqual([...links.values()].map((l) => l.candidatureId), ["s1", "s1", "s1"]);
+});
+
+test("créer force une nouvelle candidature même si une autre correspond", () => {
+  const { candidatures } = buildCandidatures(
+    [ev({ day: 1 }), ev({ day: 2, type: "autre", gmailId: "nouvelle" })],
+    [{ kind: "creer", gmailId: "nouvelle" }],
+  );
+  assert.equal(candidatures.length, 2);
+});
+
+test("rattacher à une candidature créée plus tard : le mail ancien ne fait pas reculer le dernier événement", () => {
+  const { candidatures, links } = buildCandidatures(
+    [
+      ev({ day: 1, type: "autre", company: "Inconnue", gmailId: "ancien" }),
+      ev({ day: 5, type: "candidature_envoyee", gmailId: "cible" }),
+      ev({ day: 8, type: "refus" }),
+    ],
+    [{ kind: "rattacher", gmailId: "ancien", candidatureId: "cible" }],
+  );
+  assert.equal(links.get("ancien")?.candidatureId, "cible");
+  const c = candidatures.find((x) => x.id === "cible")!;
+  assert.equal(c.status, "Refus");
+  assert.equal(c.lastEventAt.getUTCDate(), 8);
+  assert.equal(c.appliedAt.getUTCDate(), 1);
+});
+
+test("rattacher à une candidature qui n'existe plus : le mail redevient à classer", () => {
+  const { links } = buildCandidatures([ev({ day: 1, type: "autre", gmailId: "m" })], [
+    { kind: "rattacher", gmailId: "m", candidatureId: "disparue" },
+  ]);
+  assert.deepEqual(links.get("m"), { candidatureId: null, toCheck: false });
+});
+
+test("ignorer : le mail n'est ni rattaché ni proposé à classer, même s'il aurait créé une candidature", () => {
+  const { candidatures, links } = buildCandidatures([ev({ day: 1, gmailId: "cesi" })], [{ kind: "ignorer", gmailId: "cesi" }]);
+  assert.equal(candidatures.length, 0);
+  assert.equal(links.has("cesi"), false);
+});
+
+test("critère #17 : une décision manuelle survit aux recalculs, la plus récente l'emporte", () => {
+  const db = openDb(":memory:");
+  const base = { sent: false, filterRule: "mot-cle", company: "Skysoft", jobTitle: null };
+  saveMailResult(db, { ...base, gmailId: "s1", receivedAt: new Date("2026-09-22"), eventType: "autre" });
+  saveMailResult(db, { ...base, gmailId: "s2", receivedAt: new Date("2026-09-29"), eventType: "autre" });
+
+  addCorrection(db, { kind: "ignorer", gmailId: "s1" });
+  addCorrection(db, { kind: "creer", gmailId: "s1" }); // changement d'avis
+  rebuildCandidatures(db);
+  rebuildCandidatures(db);
+
+  const rows = db.prepare("SELECT gmail_id, candidature_id FROM mail_links ORDER BY gmail_id").all();
+  assert.deepEqual(rows.map((r) => ({ ...r })), [
+    { gmail_id: "s1", candidature_id: "s1" },
+    { gmail_id: "s2", candidature_id: "s1" },
+  ]);
 });

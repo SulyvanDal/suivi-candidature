@@ -123,13 +123,16 @@ lecture du corps des mails.
   mail. Rattachement : même fil Gmail → même entreprise + même poste (noms rapprochés, de
   préférence candidature en cours ; entreprise inconnue → intitulé identique exigé) → sinon
   création (sauf `autre`, non rattaché). Nouvel envoi après refus = nouvelle candidature.
-  Corrections manuelles : table `corrections`, à réappliquer après recalcul (#13).
+  Corrections manuelles (table `corrections`, jamais effacée, relue à chaque recalcul ; la plus
+  récente par mail l'emporte) : `creer` (le mail compte comme un envoi), `rattacher` (forcé, même
+  vers une candidature créée plus tard), `ignorer`. Écrites depuis la section « À classer » (#17).
 - Interface (`src/ui/`, #13 découpée en #16 consultation, #17 À classer, #18 édition) :
   **Hono + HTML généré côté serveur + htmx** (choix utilisateur ; migration vers React possible
   plus tard). `app.ts` (routes, testable via `app.request` sans serveur), `queries.ts` (lectures,
   statut « Sans réponse » calculé à l'affichage : Envoyée + rien depuis 21 jours), `views.ts`
   (gabarit `html` de Hono, échappement automatique), `server.ts` (127.0.0.1 uniquement).
-  htmx servi depuis node_modules : aucune ressource chargée depuis Internet. Style validé par
+  htmx servi depuis node_modules : aucune ressource chargée depuis Internet. Écritures protégées
+  par le middleware CSRF de Hono (formulaires acceptés seulement depuis l'interface). Style validé par
   l'utilisateur : doux et chaleureux (beige, sauge, terracotta), polices Apple, liste aérée.
 - `data/suivi.db` contient les **vraies données** depuis le premier passage du 05/10/2026
   (1 419 mails, 246 envoyés à Claude, 94 liés à une candidature, 0,49 $).

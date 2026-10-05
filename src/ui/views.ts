@@ -2,7 +2,7 @@
 // un objet de mail contenant du HTML s'affiche comme du texte, il ne s'exécute pas.
 
 import { html } from "hono/html";
-import type { CandidatureRow, DisplayStatus, MailRow } from "./queries.js";
+import type { CandidatureRow, DisplayStatus, MailRow, MailToClassify } from "./queries.js";
 import { DISPLAY_STATUSES } from "./queries.js";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -29,7 +29,8 @@ const longDate = (d: Date) => d.toLocaleDateString("fr-FR", { timeZone: TZ, day:
 const statusSlug = (s: DisplayStatus) =>
   s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, "-");
 const badge = (s: DisplayStatus) => html`<span class="badge badge-${statusSlug(s)}">${s}</span>`;
-const gmailUrl = (m: MailRow) => `https://mail.google.com/mail/u/0/#all/${m.threadId ?? m.gmailId}`;
+const gmailUrl = (m: { threadId: string | null; gmailId: string }) =>
+  `https://mail.google.com/mail/u/0/#all/${m.threadId ?? m.gmailId}`;
 
 function layout(title: string, body: unknown) {
   return html`<!doctype html>
@@ -47,8 +48,62 @@ function layout(title: string, body: unknown) {
     </html>`;
 }
 
-/** Page principale : filtres par statut et liste aérée. */
-export function listPage(all: CandidatureRow[], filter: DisplayStatus | null) {
+/** Mails à classer à la main (#17) : affiché seulement s'il y en a. */
+function toClassifySection(mails: MailToClassify[], candidatures: CandidatureRow[]) {
+  if (mails.length === 0) return "";
+  const options = [...candidatures].sort((a, b) =>
+    (a.company ?? "").localeCompare(b.company ?? "", "fr", { sensitivity: "base" }),
+  );
+  // hx-boost : les formulaires sont envoyés sans recharger toute la page (et marchent sans JavaScript).
+  return html`<section class="a-classer" hx-boost="true">
+    <h2>À classer <span class="compteur">${mails.length}</span></h2>
+    <p class="aide">
+      Ces mails concernent une démarche, mais aucune candidature ne leur correspond. Crée une candidature, rattache-les
+      à une existante, ou ignore-les.
+    </p>
+    <ul class="liste">
+      ${mails.map(
+        (m) => html`<li class="mail-a-classer">
+          <div class="ligne-principale">
+            <span class="entreprise">${m.company ?? "Entreprise inconnue"}</span>
+            <span class="mail-date">${date(m.date)}</span>
+          </div>
+          <div class="mail-objet">${m.subject || "(sans objet)"}</div>
+          <div class="mail-sens">
+            ${m.sent ? "Envoyé à" : "Reçu de"} ${m.correspondent ?? "?"} ·
+            <a href="${gmailUrl(m)}" target="_blank" rel="noreferrer">Ouvrir dans Gmail</a>
+          </div>
+          <div class="actions">
+            <form method="post" action="/a-classer/${m.gmailId}/creer">
+              <button type="submit" class="bouton bouton-principal">Créer une candidature</button>
+            </form>
+            <form method="post" action="/a-classer/${m.gmailId}/rattacher" class="rattacher">
+              <select name="candidature" required aria-label="Candidature à laquelle rattacher ce mail">
+                <option value="">Rattacher à…</option>
+                ${options.map(
+                  (c) => html`<option value="${c.id}">
+                    ${c.company ?? "Entreprise inconnue"} · ${c.jobTitle ?? "poste non précisé"} (${date(c.appliedAt)})
+                  </option>`,
+                )}
+              </select>
+              <button type="submit" class="bouton">Rattacher</button>
+            </form>
+            <form method="post" action="/a-classer/${m.gmailId}/ignorer">
+              <button type="submit" class="bouton bouton-discret">Ignorer</button>
+            </form>
+          </div>
+        </li>`,
+      )}
+    </ul>
+  </section>`;
+}
+
+/** Page principale : mails à classer, filtres par statut et liste aérée. */
+export function listPage(
+  all: CandidatureRow[],
+  filter: DisplayStatus | null,
+  toClassify: MailToClassify[] = [],
+) {
   const rows = filter ? all.filter((c) => c.status === filter) : all;
   const count = (s: DisplayStatus) => all.filter((c) => c.status === s).length;
   // Les filtres remplacent seulement #contenu (htmx), et fonctionnent aussi sans JavaScript.
@@ -72,6 +127,7 @@ export function listPage(all: CandidatureRow[], filter: DisplayStatus | null) {
         <h1>Mes candidatures</h1>
         <p class="sous-titre">${all.length} candidatures depuis le 1<sup>er</sup> juin</p>
       </header>
+      ${toClassifySection(toClassify, all)}
       <div id="contenu">
         <nav class="filtres">
           ${filterLink("Toutes", null, all.length)}

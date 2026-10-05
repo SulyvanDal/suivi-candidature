@@ -31,9 +31,22 @@ function setup() {
   // Candidature refusée, avec un objet contenant du HTML.
   mail("c1", "09-01", "candidature_envoyee", { company: "Piège", threadId: "t-c" });
   mail("c2", "09-10", "refus", { company: "Piège", threadId: "t-c", subject: "<script>alert(1)</script>" });
+  // Échange sans candidature correspondante → à classer.
+  mail("x1", "09-20", "autre", { company: "Immersion SA", jobTitle: null, subject: "Demande d'immersion" });
   rebuildCandidatures(db);
   return createApp(db, () => NOW);
 }
+
+/** Partie « liste des candidatures » de la page (sans la section « À classer » et ses menus). */
+const listPart = (body: string) => body.slice(body.indexOf('id="contenu"'));
+
+/** Envoi d'un formulaire depuis l'interface elle-même (même origine). */
+const post = (app: ReturnType<typeof setup>, path: string, form: Record<string, string> = {}, origin = "http://localhost") =>
+  app.request(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: origin },
+    body: new URLSearchParams(form).toString(),
+  });
 
 test("« Sans réponse » : envoyée et rien depuis plus de 3 semaines", () => {
   assert.equal(displayStatus("Envoyée", new Date("2026-09-01"), NOW), "Sans réponse");
@@ -44,15 +57,16 @@ test("« Sans réponse » : envoyée et rien depuis plus de 3 semaines", () => {
 test("page principale : toutes les candidatures, la plus récente en premier, avec compteurs", async () => {
   const res = await setup().request("/");
   assert.equal(res.status, 200);
-  const body = await res.text();
+  const full = await res.text();
+  const body = listPart(full);
   assert.ok(body.indexOf("Exemple") < body.indexOf("Piège") && body.indexOf("Piège") < body.indexOf("Ancienne"));
   assert.match(body, /Toutes <span class="compteur">3<\/span>/);
   assert.match(body, /Sans réponse <span class="compteur">1<\/span>/);
-  assert.match(body, /src="\/htmx.js"/);
+  assert.match(full, /src="\/htmx.js"/);
 });
 
 test("filtre par statut", async () => {
-  const body = await (await setup().request("/?statut=Sans%20r%C3%A9ponse")).text();
+  const body = listPart(await (await setup().request("/?statut=Sans%20r%C3%A9ponse")).text());
   assert.match(body, /Ancienne/);
   assert.doesNotMatch(body, /Piège/);
 });
@@ -89,4 +103,53 @@ test("htmx et la feuille de style sont servis localement", async () => {
   const app = setup();
   assert.equal((await app.request("/htmx.js")).headers.get("content-type"), "text/javascript; charset=utf-8");
   assert.match(await (await app.request("/style.css")).text(), /--fond/);
+});
+
+// --- À classer (#17) ---
+
+test("section « À classer » : affichée avec le mail et la liste des candidatures", async () => {
+  const body = await (await setup().request("/")).text();
+  assert.match(body, /À classer <span class="compteur">1<\/span>/);
+  assert.match(body, /Demande d&#39;immersion|Demande d'immersion/);
+  assert.match(body, /action="\/a-classer\/x1\/creer"/);
+  assert.match(body, /<option value="c1">/);
+});
+
+test("créer une candidature : le mail quitte « À classer » et la candidature apparaît", async () => {
+  const app = setup();
+  const res = await post(app, "/a-classer/x1/creer");
+  assert.equal(res.status, 303);
+  const body = await (await app.request("/")).text();
+  assert.doesNotMatch(body, /À classer/);
+  assert.match(listPart(body), /href="\/candidatures\/x1">[\s\S]*?Immersion SA/);
+});
+
+test("rattacher à une candidature existante", async () => {
+  const app = setup();
+  assert.equal((await post(app, "/a-classer/x1/rattacher", { candidature: "c1" })).status, 303);
+  const detail = await (await app.request("/candidatures/c1")).text();
+  assert.equal(detail.match(/class="evenement /g)?.length, 3);
+});
+
+test("rattacher à une candidature inconnue : refusé", async () => {
+  assert.equal((await post(setup(), "/a-classer/x1/rattacher", { candidature: "nulle-part" })).status, 400);
+});
+
+test("ignorer : le mail disparaît sans créer de candidature", async () => {
+  const app = setup();
+  await post(app, "/a-classer/x1/ignorer");
+  const body = await (await app.request("/")).text();
+  assert.doesNotMatch(body, /À classer/);
+  assert.match(body, /Toutes <span class="compteur">3<\/span>/);
+});
+
+test("formulaire envoyé depuis un autre site : rejeté (protection CSRF)", async () => {
+  const res = await post(setup(), "/a-classer/x1/ignorer", {}, "https://site-malveillant.example");
+  assert.equal(res.status, 403);
+});
+
+test("mail ou action inconnus : 404", async () => {
+  const app = setup();
+  assert.equal((await post(app, "/a-classer/inconnu/creer")).status, 404);
+  assert.equal((await post(app, "/a-classer/x1/supprimer")).status, 404);
 });

@@ -102,3 +102,33 @@ export function getCandidature(
     })),
   };
 }
+
+export interface MailToClassify {
+  gmailId: string;
+  threadId: string | null;
+  date: Date;
+  sent: boolean;
+  correspondent: string | null;
+  subject: string | null;
+  company: string | null;
+}
+
+/** Mails liés à une candidature d'après Claude, mais rattachés à aucune : à classer à la main. */
+export function listToClassify(db: DatabaseSync): MailToClassify[] {
+  const rows = db
+    .prepare(
+      `SELECT r.gmail_id, r.thread_id, r.received_at, r.sent, r.correspondent, r.subject, r.company
+       FROM mail_links l JOIN mail_results r USING (gmail_id)
+       WHERE l.candidature_id IS NULL ORDER BY r.received_at`,
+    )
+    .all() as Row[];
+  return rows.map((r) => ({
+    gmailId: r.gmail_id as string,
+    threadId: r.thread_id as string | null,
+    date: new Date(r.received_at as string),
+    sent: r.sent === 1,
+    correspondent: r.correspondent as string | null,
+    subject: r.subject as string | null,
+    company: r.company as string | null,
+  }));
+}

@@ -3,7 +3,9 @@
 import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { Hono } from "hono";
-import { DISPLAY_STATUSES, type DisplayStatus, getCandidature, listCandidatures } from "./queries.js";
+import { csrf } from "hono/csrf";
+import { addCorrection, rebuildCandidatures } from "../candidatures.js";
+import { DISPLAY_STATUSES, type DisplayStatus, getCandidature, listCandidatures, listToClassify } from "./queries.js";
 import { detailPage, listPage, notFoundPage } from "./views.js";
 
 // htmx est servi depuis node_modules : la page ne charge rien depuis Internet.
@@ -13,10 +15,35 @@ const CSS = readFileSync(new URL("./style.css", import.meta.url), "utf8");
 export function createApp(db: DatabaseSync, now: () => Date = () => new Date()): Hono {
   const app = new Hono();
 
+  // Écritures uniquement depuis l'interface elle-même : une autre page ouverte dans le navigateur
+  // ne peut pas envoyer de formulaire à 127.0.0.1 à ta place.
+  app.use(csrf());
+
   app.get("/", (c) => {
     const statut = c.req.query("statut");
     const filter = DISPLAY_STATUSES.includes(statut as DisplayStatus) ? (statut as DisplayStatus) : null;
-    return c.html(listPage(listCandidatures(db, now()), filter));
+    return c.html(listPage(listCandidatures(db, now()), filter, listToClassify(db)));
+  });
+
+  // Classement manuel d'un mail (#17) : la décision est enregistrée, puis tout est recalculé.
+  app.post("/a-classer/:id/:action", async (c) => {
+    const gmailId = c.req.param("id");
+    const action = c.req.param("action");
+    const known = db.prepare("SELECT 1 FROM mail_results WHERE gmail_id = ?").get(gmailId);
+    if (!known) return c.text("Mail inconnu", 404);
+
+    if (action === "creer" || action === "ignorer") {
+      addCorrection(db, { kind: action, gmailId });
+    } else if (action === "rattacher") {
+      const candidatureId = String((await c.req.parseBody()).candidature ?? "");
+      const exists = db.prepare("SELECT 1 FROM candidatures WHERE id = ?").get(candidatureId);
+      if (!exists) return c.text("Candidature inconnue", 400);
+      addCorrection(db, { kind: "rattacher", gmailId, candidatureId });
+    } else {
+      return c.text("Action inconnue", 404);
+    }
+    rebuildCandidatures(db);
+    return c.redirect("/", 303);
   });
 
   app.get("/candidatures/:id", (c) => {

@@ -115,24 +115,56 @@ function match(c: Candidature, e: CandidatureEvent): "forte" | "faible" | null {
 
 // --- Recalcul ------------------------------------------------------------------------------
 
-export function buildCandidatures(events: CandidatureEvent[]): {
+/** Décisions manuelles (#17), une par mail : la plus récente l'emporte. */
+export type Correction =
+  | { kind: "creer"; gmailId: string }
+  | { kind: "rattacher"; gmailId: string; candidatureId: string }
+  | { kind: "ignorer"; gmailId: string };
+
+export function buildCandidatures(
+  events: CandidatureEvent[],
+  corrections: Correction[] = [],
+): {
   candidatures: Candidature[];
   links: Map<string, Link>;
 } {
+  const decided = new Map(corrections.map((c) => [c.gmailId, c]));
   const candidatures: Candidature[] = [];
+  const byId = new Map<string, Candidature>();
   const links = new Map<string, Link>();
   const byThread = new Map<string, Candidature>();
+  // Rattachements forcés vers une candidature pas encore créée : traités à la fin.
+  const deferred: { e: CandidatureEvent; candidatureId: string }[] = [];
   const sorted = [...events].sort((a, b) => a.date.getTime() - b.date.getTime());
 
+  const attach = (target: Candidature, e: CandidatureEvent, toCheck: boolean) => {
+    apply(target, e);
+    target.toCheck ||= toCheck;
+    if (e.threadId) byThread.set(e.threadId, target);
+    links.set(e.gmailId, { candidatureId: target.id, toCheck });
+  };
+
   for (const e of sorted) {
+    const decision = decided.get(e.gmailId);
+
+    // Décisions manuelles : elles passent avant les règles automatiques.
+    if (decision?.kind === "ignorer") continue;
+    if (decision?.kind === "rattacher") {
+      const forced = byId.get(decision.candidatureId);
+      if (forced) attach(forced, e, false);
+      else deferred.push({ e, candidatureId: decision.candidatureId });
+      continue;
+    }
+    const forceCreate = decision?.kind === "creer";
+
     let target: Candidature | undefined;
     let toCheck = false;
 
     // 1. Même fil de discussion.
-    if (e.threadId) target = byThread.get(e.threadId);
+    if (!forceCreate && e.threadId) target = byThread.get(e.threadId);
 
     // 2. Même entreprise et même poste.
-    if (!target) {
+    if (!forceCreate && !target) {
       const strong = candidatures.filter((c) => match(c, e) === "forte");
       const pool = strong.length > 0 ? strong : candidatures.filter((c) => match(c, e) === "faible");
       const open = pool.filter(isOpen);
@@ -144,9 +176,9 @@ export function buildCandidatures(events: CandidatureEvent[]): {
       }
     }
 
-    // 3. Création, ou mail « autre » non rattaché.
+    // 3. Création (un mail « créer » compte comme un envoi), ou mail « autre » non rattaché.
     if (!target) {
-      const status = STATUS_OF[e.type];
+      const status = forceCreate ? "Envoyée" : STATUS_OF[e.type];
       if (!status) {
         links.set(e.gmailId, { candidatureId: null, toCheck: false });
         continue;
@@ -166,12 +198,17 @@ export function buildCandidatures(events: CandidatureEvent[]): {
         events: [],
       };
       candidatures.push(target);
+      byId.set(target.id, target);
     }
 
-    apply(target, e);
-    target.toCheck ||= toCheck;
-    if (e.threadId) byThread.set(e.threadId, target);
-    links.set(e.gmailId, { candidatureId: target.id, toCheck });
+    attach(target, e, toCheck);
+  }
+
+  // Candidature cible disparue : le mail redevient « à classer ».
+  for (const { e, candidatureId } of deferred) {
+    const forced = byId.get(candidatureId);
+    if (forced) attach(forced, e, false);
+    else links.set(e.gmailId, { candidatureId: null, toCheck: false });
   }
 
   return { candidatures, links };
@@ -184,17 +221,46 @@ function apply(c: Candidature, e: CandidatureEvent): void {
   c.location ??= e.location;
   c.channel ??= e.channel;
   c.offerUrl ??= e.offerUrl;
-  // Le dernier événement qui change le statut l'emporte.
-  const status = STATUS_OF[e.type];
-  if (status) c.status = status;
-  c.lastEventAt = e.date;
-  c.lastEventType = e.type;
+  // Un mail plus ancien rattaché après coup ne fait pas reculer le dernier événement.
+  if (e.date < c.appliedAt) c.appliedAt = e.date;
+  if (e.date >= c.lastEventAt) {
+    const status = STATUS_OF[e.type];
+    if (status) c.status = status;
+    c.lastEventAt = e.date;
+    c.lastEventType = e.type;
+  }
   c.events.push(e.gmailId);
 }
 
 // --- Base de données ------------------------------------------------------------------------
 
-/** Recalcule les candidatures à partir des mails classés, et remplace les tables calculées. */
+const CORRECTION_KINDS = ["creer", "rattacher", "ignorer"];
+
+/** Corrections manuelles, dans l'ordre d'enregistrement (la dernière pour un mail l'emporte). */
+export function loadCorrections(db: DatabaseSync): Correction[] {
+  const rows = db
+    .prepare(`SELECT kind, target, value FROM corrections WHERE kind IN ('creer', 'rattacher', 'ignorer') ORDER BY id`)
+    .all() as { kind: string; target: string; value: string | null }[];
+  return rows.map((r) =>
+    r.kind === "rattacher"
+      ? { kind: "rattacher", gmailId: r.target, candidatureId: r.value ?? "" }
+      : { kind: r.kind as "creer" | "ignorer", gmailId: r.target },
+  );
+}
+
+/** Enregistre une décision manuelle sur un mail. Elle survit à tous les recalculs. */
+export function addCorrection(db: DatabaseSync, correction: Correction): void {
+  if (!CORRECTION_KINDS.includes(correction.kind)) throw new Error(`Correction inconnue : ${correction.kind}`);
+  db.prepare("INSERT INTO corrections (kind, target, value, created_at) VALUES (?, ?, ?, ?)").run(
+    correction.kind,
+    correction.gmailId,
+    correction.kind === "rattacher" ? correction.candidatureId : null,
+    new Date().toISOString(),
+  );
+}
+
+/** Recalcule les candidatures à partir des mails classés et des corrections manuelles,
+ *  et remplace les tables calculées. */
 export function rebuildCandidatures(db: DatabaseSync): { candidatures: Candidature[]; links: Map<string, Link> } {
   const rows = db
     .prepare(
@@ -215,8 +281,7 @@ export function rebuildCandidatures(db: DatabaseSync): { candidatures: Candidatu
     offerUrl: r.offer_url,
   }));
 
-  const result = buildCandidatures(events);
-  // Corrections manuelles (table corrections) : à appliquer ici avec #13.
+  const result = buildCandidatures(events, loadCorrections(db));
 
   db.exec("BEGIN");
   try {
