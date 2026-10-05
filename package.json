@@ -9,6 +9,7 @@
     "sync": "tsx src/sync-run.ts",
     "extract": "tsx src/extract-run.ts",
     "filter": "tsx src/filter-run.ts",
+    "eval:classify": "tsx src/classify-eval.ts",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
@@ -17,9 +18,11 @@
     "url": "git+https://github.com/SulyvanDal/suivi-candidature.git"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@googleapis/gmail": "^22.0.1",
     "google-auth-library": "^11.1.0",
-    "html-to-text": "^10.0.1"
+    "html-to-text": "^10.0.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/html-to-text": "^9.0.4",

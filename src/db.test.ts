@@ -15,7 +15,7 @@ test("crée la base, son dossier et le schéma", () => {
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
     .all()
     .map((row) => row.name);
-  assert.deepEqual(tables, ["processed_messages", "sync_state"]);
+  assert.deepEqual(tables, ["mail_results", "processed_messages", "sync_state"]);
   db.close();
 });
 

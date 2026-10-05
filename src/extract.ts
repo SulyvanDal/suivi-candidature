@@ -17,6 +17,8 @@ export interface ExtractedMail {
   from: string;
   to: string;
   subject: string;
+  /** Envoyé par moi (libellé SENT). */
+  sent: boolean;
   text: string;
 }
 
@@ -31,6 +33,7 @@ export function extractMail(message: gmail_v1.Schema$Message): ExtractedMail {
     from: header(payload, "From"),
     to: header(payload, "To"),
     subject: header(payload, "Subject"),
+    sent: message.labelIds?.includes("SENT") ?? false,
     text: clean(partText(payload)),
   };
 }
@@ -82,11 +85,20 @@ function decodeBody(part: Part): string {
   if (!part.body?.data) return "";
   const bytes = Buffer.from(part.body.data, "base64url");
   const charset = /charset="?([^";\s]+)"?/i.exec(header(part, "Content-Type"))?.[1] ?? "utf-8";
+  // Certains expéditeurs annoncent ISO-8859-1 mais envoient de l'UTF-8 (« PrÃ©-Bois »).
+  // Une suite d'octets non-ASCII valide en UTF-8 n'arrive quasiment jamais par hasard :
+  // si c'est le cas, on la décode en UTF-8.
+  const validUtf8 = tryDecode("utf-8", bytes, true);
+  if (validUtf8 !== null && /[^\x00-\x7f]/.test(validUtf8)) return validUtf8;
+  return tryDecode(charset, bytes, false) ?? new TextDecoder("utf-8").decode(bytes);
+}
+
+/** Décode, ou renvoie null si le jeu de caractères est inconnu (ou les octets invalides en mode strict). */
+function tryDecode(charset: string, bytes: Buffer, fatal: boolean): string | null {
   try {
-    return new TextDecoder(charset).decode(bytes);
+    return new TextDecoder(charset, { fatal }).decode(bytes);
   } catch {
-    // Jeu de caractères inconnu : UTF-8 par défaut.
-    return new TextDecoder("utf-8").decode(bytes);
+    return null;
   }
 }
 

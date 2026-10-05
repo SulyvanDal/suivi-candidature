@@ -141,6 +141,18 @@ test("mail non distribué : seule la partie lisible est gardée", () => {
   assert.equal(mail.text, "Delivery has failed to these recipients.");
 });
 
+test("UTF-8 annoncé à tort comme ISO-8859-1 : décodé en UTF-8", () => {
+  const part = textPart("text/plain", "Route de Pré-Bois, nous-mêmes");
+  part.headers = [{ name: "Content-Type", value: 'text/plain; charset="iso-8859-1"' }];
+  assert.equal(extractMail(message(part)).text, "Route de Pré-Bois, nous-mêmes");
+});
+
+test("mail envoyé repéré par le libellé SENT", () => {
+  const sent = { ...message(textPart("text/plain", "x")), labelIds: ["SENT"] };
+  assert.equal(extractMail(sent).sent, true);
+  assert.equal(extractMail(message(textPart("text/plain", "x"))).sent, false);
+});
+
 test("jeu de caractères ISO-8859-1 décodé correctement", () => {
   const mail = extractMail(message(textPart("text/plain", "Désolé, poste pourvu.", "iso-8859-1")));
   assert.equal(mail.text, "Désolé, poste pourvu.");

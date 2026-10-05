@@ -27,6 +27,20 @@ const MIGRATIONS: string[] = [
     last_sync_at TEXT
   );
   `,
+  // 2 — Résultat du traitement de chaque mail : pré-filtre puis classification (#8)
+  `
+  CREATE TABLE mail_results (
+    gmail_id      TEXT PRIMARY KEY,
+    received_at   TEXT NOT NULL,     -- date ISO 8601
+    sent          INTEGER NOT NULL,  -- 1 = envoyé par moi
+    filter_rule   TEXT NOT NULL,     -- règle du pré-filtre (mot-cle, offre-fermee…)
+    filter_match  TEXT,
+    event_type    TEXT,              -- classification Claude ; NULL si écarté par le pré-filtre
+    justification TEXT,
+    model         TEXT,
+    processed_at  TEXT NOT NULL
+  );
+  `,
 ];
 
 /** Ouvre la base (en la créant si besoin) et applique les migrations manquantes. */
@@ -65,6 +79,35 @@ export function markProcessed(db: DatabaseSync, gmailId: string): void {
   db.prepare(
     "INSERT OR IGNORE INTO processed_messages (gmail_id, processed_at) VALUES (?, ?)",
   ).run(gmailId, new Date().toISOString());
+}
+
+export interface MailResult {
+  gmailId: string;
+  receivedAt: Date;
+  sent: boolean;
+  filterRule: string;
+  filterMatch?: string;
+  eventType?: string;
+  justification?: string;
+  model?: string;
+}
+
+export function saveMailResult(db: DatabaseSync, r: MailResult): void {
+  db.prepare(
+    `INSERT OR REPLACE INTO mail_results
+       (gmail_id, received_at, sent, filter_rule, filter_match, event_type, justification, model, processed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    r.gmailId,
+    r.receivedAt.toISOString(),
+    r.sent ? 1 : 0,
+    r.filterRule,
+    r.filterMatch ?? null,
+    r.eventType ?? null,
+    r.justification ?? null,
+    r.model ?? null,
+    new Date().toISOString(),
+  );
 }
 
 export interface SyncState {
