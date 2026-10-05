@@ -1,0 +1,84 @@
+# CLAUDE.md
+
+Instructions pour Claude Code sur ce dépôt.
+
+## Projet
+
+Outil personnel de suivi de candidatures, alimenté par les mails reçus sur Gmail.
+
+Cible à terme :
+```
+Gmail (nouveaux mails) → filtrage → extraction du texte → API Claude (classement / extraction) → base de données
+```
+
+## Phase actuelle : prototype d'accès Gmail (jetable)
+
+Seul objectif : prouver que du code TypeScript peut s'authentifier sur le compte Gmail
+de l'utilisateur et lister les mails reçus au cours des dernières 24 h.
+
+Critères de réussite :
+- Une commande dans le terminal affiche, pour chaque mail des dernières 24 h :
+  identifiant, date, expéditeur, objet.
+- Une seconde exécution ne redemande pas l'autorisation.
+
+Hors périmètre de cette phase : base de données, appel à l'API Claude, interface,
+lecture du corps des mails.
+
+## Commandes
+
+- `npm run list` : liste les mails des dernières 24 h (lance l'autorisation si nécessaire).
+- `npm run typecheck` : vérification des types.
+
+## Contraintes
+
+- TypeScript sur Node.js.
+- Bibliothèques **officielles de Google uniquement** pour l'accès à Gmail
+  (`google-auth-library`, `@googleapis/gmail`).
+- Permission OAuth : `https://www.googleapis.com/auth/gmail.readonly`, rien d'autre.
+  (`gmail.metadata` serait plus restreint mais interdit le paramètre de recherche `q`.)
+- Appels Gmail en `format: "metadata"` uniquement : ne jamais télécharger le corps des mails
+  pendant cette phase.
+- Identifiants et jetons dans `secrets/` (exclu de git) :
+  - `secrets/credentials.json` : identifiant client OAuth, déposé par l'utilisateur ;
+  - `secrets/token.json` : jetons générés par le script, droits `600`.
+- Ne jamais afficher un secret ou un jeton dans la console, ni l'écrire dans le code.
+- Code minimal et lisible. **Commenter chaque étape de l'authentification** :
+  l'utilisateur veut comprendre le flux.
+
+## Façon de travailler
+
+- Avant d'écrire du code pour une nouvelle étape, expliquer l'approche et
+  **attendre la validation de l'utilisateur**.
+- Répartition :
+  - l'utilisateur gère la console Google Cloud (projet, activation de l'API,
+    écran de consentement, création des identifiants) ;
+  - Claude écrit le code, la documentation et indique où déposer les fichiers.
+- Échanges en français.
+
+## Choix techniques retenus
+
+- Client OAuth de type **Application de bureau** ; redirection vers `http://127.0.0.1:<port libre>`.
+- Flux implémenté directement avec `google-auth-library` (pas `@google-cloud/local-auth`,
+  qui masque le flux) : serveur local de redirection, PKCE, vérification de `state`,
+  `access_type=offline`.
+- Si `token.json` existe, la bibliothèque rafraîchit l'access token toute seule ; en cas de
+  `invalid_grant`, supprimer le jeton et relancer le flux avec un message explicite.
+- Filtre des 24 h : `q = "after:<horodatage Unix>"`, avec pagination.
+- Module d'authentification (`src/auth.ts`) écrit pour être réutilisé par l'application complète.
+- Exécution TypeScript via `tsx`.
+- L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est
+  affichée dans le terminal que si l'ouverture échoue.
+
+## Limites connues
+
+- Application en mode **Test** : le refresh token expire au bout de **7 jours**.
+- Usage personnel (< 100 utilisateurs) : pas de validation Google ni d'audit nécessaire.
+  Pour l'application complète, envisager le passage **En production sans validation**,
+  qui supprime l'expiration des 7 jours (à vérifier dans la console le moment venu).
+
+## Pistes pour l'application complète
+
+- Remplacer la fenêtre « 24 h » par un suivi incrémental (`historyId` / `users.history.list`)
+  et mémoriser les identifiants déjà traités.
+- Filtrer les mails avant envoi à Claude (coût et confidentialité).
+- Extraire proprement le texte des mails HTML / multipart.

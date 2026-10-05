@@ -1,0 +1,24 @@
+{
+  "name": "suivi-candidature",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Outil personnel de suivi de candidatures, alimenté par les mails reçus sur Gmail.",
+  "type": "module",
+  "scripts": {
+    "list": "tsx src/list-recent.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SulyvanDal/suivi-candidature.git"
+  },
+  "dependencies": {
+    "@googleapis/gmail": "^22.0.1",
+    "google-auth-library": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

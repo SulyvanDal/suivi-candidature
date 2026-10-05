@@ -1,0 +1,5 @@
+# Identifiants OAuth et jetons : ne jamais commiter
+secrets/
+
+node_modules/
+.DS_Store
