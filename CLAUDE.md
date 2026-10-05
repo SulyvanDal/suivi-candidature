@@ -41,6 +41,7 @@ lecture du corps des mails.
   (appelle Claude, ~0,18 $).
 - `npm run reanalyse` : repasse à Claude les mails déjà gardés par le pré-filtre et met la base
   à jour (appelle Claude, ~0,55 $). **Toujours demander confirmation avant toute commande payante.**
+- `npm run ui` : interface web locale sur http://127.0.0.1:4321 (gratuit, lecture seule de la base).
 - `npm run candidatures` : recalcule les candidatures et les affiche (gratuit, n'appelle pas Claude).
 - `npm test` : tests automatiques (`node:test`, fichiers `src/**/*.test.ts`).
 - `npm run typecheck` : vérification des types.
@@ -123,6 +124,12 @@ lecture du corps des mails.
   préférence candidature en cours ; entreprise inconnue → intitulé identique exigé) → sinon
   création (sauf `autre`, non rattaché). Nouvel envoi après refus = nouvelle candidature.
   Corrections manuelles : table `corrections`, à réappliquer après recalcul (#13).
+- Interface (`src/ui/`, #13 découpée en #16 consultation, #17 À classer, #18 édition) :
+  **Hono + HTML généré côté serveur + htmx** (choix utilisateur ; migration vers React possible
+  plus tard). `app.ts` (routes, testable via `app.request` sans serveur), `queries.ts` (lectures,
+  statut « Sans réponse » calculé à l'affichage : Envoyée + rien depuis 21 jours), `views.ts`
+  (gabarit `html` de Hono, échappement automatique), `server.ts` (127.0.0.1 uniquement).
+  htmx servi depuis node_modules : aucune ressource chargée depuis Internet.
 - `data/suivi.db` contient les **vraies données** depuis le premier passage du 05/10/2026
   (1 419 mails, 246 envoyés à Claude, 94 liés à une candidature, 0,49 $).
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est
@@ -144,7 +151,8 @@ Suivie dans les issues GitHub (`gh issue list`) :
 3. Synchronisation : #4 stockage SQLite, #5 synchronisation incrémentale (`historyId`)
 4. Extraction du texte : #6 corps des mails → texte, #7 pré-filtre
 5. Analyse par Claude : #8 classification, #9 extraction structurée, #10 rattachement aux candidatures
-6. Restitution et automatisation : #11 tableau dans le terminal, #12 exécution quotidienne (`launchd`),
-   #13 interface avec édition manuelle
+6. Restitution et automatisation : #11 tableau dans le terminal (abandonné, couvert par
+   `npm run candidatures`), #12 exécution quotidienne (`launchd`), #13 interface : #16 consultation,
+   #17 mails à classer, #18 édition
 7. Améliorations : #14 marquer les offres fermées (mails Hellowork « n'est plus disponible »),
    #15 listes d'expéditeurs bloqués / toujours gardés, gérées depuis l'interface (en base, pas dans le code)

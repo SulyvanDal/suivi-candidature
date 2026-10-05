@@ -85,6 +85,11 @@ const MIGRATIONS: string[] = [
     created_at TEXT NOT NULL
   );
   `,
+  // 5 — Objet et correspondant de chaque mail, pour l'interface (#16)
+  `
+  ALTER TABLE mail_results ADD COLUMN subject       TEXT;
+  ALTER TABLE mail_results ADD COLUMN correspondent TEXT;  -- expéditeur (reçu) ou destinataire (envoyé)
+  `,
 ];
 
 /** Ouvre la base (en la créant si besoin) et applique les migrations manquantes. */
@@ -128,6 +133,8 @@ export function markProcessed(db: DatabaseSync, gmailId: string): void {
 export interface MailResult {
   gmailId: string;
   threadId?: string | null;
+  subject?: string | null;
+  correspondent?: string | null;
   receivedAt: Date;
   sent: boolean;
   filterRule: string;
@@ -146,8 +153,8 @@ export function saveMailResult(db: DatabaseSync, r: MailResult): void {
   db.prepare(
     `INSERT OR REPLACE INTO mail_results
        (gmail_id, received_at, sent, filter_rule, filter_match, event_type, justification, model,
-        company, job_title, location, channel, offer_url, thread_id, processed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        company, job_title, location, channel, offer_url, thread_id, subject, correspondent, processed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     r.gmailId,
     r.receivedAt.toISOString(),
@@ -163,6 +170,8 @@ export function saveMailResult(db: DatabaseSync, r: MailResult): void {
     r.channel ?? null,
     r.offerUrl ?? null,
     r.threadId ?? null,
+    r.subject ?? null,
+    r.correspondent ?? null,
     new Date().toISOString(),
   );
 }

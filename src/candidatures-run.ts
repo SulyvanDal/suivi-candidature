@@ -1,6 +1,6 @@
 // Recalcule les candidatures et les affiche : npm run candidatures
-// N'appelle pas Claude (gratuit). Rattrape au passage le fil Gmail des mails qui n'en ont pas
-// (mails traités avant #10), en ne lisant que leurs métadonnées.
+// N'appelle pas Claude (gratuit). Rattrape au passage le fil Gmail, l'objet et le correspondant
+// des mails traités avant #10 / #16, en ne lisant que leurs métadonnées.
 
 import { gmail } from "@googleapis/gmail";
 import { getAuthorizedClient } from "./auth.js";
@@ -15,18 +15,25 @@ try {
     db
       .prepare(
         `SELECT gmail_id FROM mail_results
-         WHERE thread_id IS NULL AND event_type IS NOT NULL AND event_type <> 'hors_sujet'`,
+         WHERE (thread_id IS NULL OR subject IS NULL)
+           AND event_type IS NOT NULL AND event_type <> 'hors_sujet'`,
       )
       .all() as { gmail_id: string }[]
   ).map((r) => r.gmail_id);
 
   if (missing.length > 0) {
-    console.log(`Rattrapage du fil Gmail pour ${missing.length} mail(s)…`);
+    console.log(`Rattrapage des métadonnées Gmail pour ${missing.length} mail(s)…`);
     const api = gmail({ version: "v1", auth: await getAuthorizedClient() });
-    const update = db.prepare("UPDATE mail_results SET thread_id = ? WHERE gmail_id = ?");
+    const update = db.prepare(
+      "UPDATE mail_results SET thread_id = ?, subject = ?, correspondent = ? WHERE gmail_id = ?",
+    );
     for (const id of missing) {
-      const { data } = await withRetry(() => api.users.messages.get({ userId: "me", id, format: "minimal" }));
-      update.run(data.threadId ?? null, id);
+      const { data } = await withRetry(() =>
+        api.users.messages.get({ userId: "me", id, format: "metadata", metadataHeaders: ["From", "To", "Subject"] }),
+      );
+      const header = (name: string) => data.payload?.headers?.find((h) => h.name === name)?.value ?? "";
+      const sent = data.labelIds?.includes("SENT") ?? false;
+      update.run(data.threadId ?? null, header("Subject"), sent ? header("To") : header("From"), id);
     }
   }
 
