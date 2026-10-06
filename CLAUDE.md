@@ -171,7 +171,11 @@ lecture du corps des mails.
   2 ans développeur, égalité gardée, réglages `plafond_*`), « confirmé » sans durée gardé. Profil
   du candidat dans `settings` (jamais dans le code), 100 annonces jugées par jour au plus, sur la
   journée entière. Champ `experienceRequirements` ignoré (Hellowork y met « 12 mois » par défaut).
-  Suite : #24 page « Offres à regarder », #25 édition des listes, du profil et des plafonds.
+  Page « Offres à regarder » (#24, `/offres`, bouton dans l'en-tête avec le nombre de nouvelles) :
+  annonces gardées par Claude + non vérifiées, sans les ignorées ; « Consulter » (formulaire
+  `target=_blank` → `seen_at`, redirection vers `page_url` sinon le lien de suivi, http(s) seulement),
+  « Ignorer » (`ignored_at`) ; compteurs des écartées sur 7 jours et des annonces en cours de tri.
+  Suite : #25 édition des listes, du profil et des plafonds.
 - `data/suivi.db` contient les **vraies données** depuis le premier passage du 05/10/2026
   (1 419 mails, 246 envoyés à Claude, 94 liés à une candidature, 0,49 $).
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est

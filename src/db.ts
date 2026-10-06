@@ -158,6 +158,11 @@ const MIGRATIONS: string[] = [
   ALTER TABLE offers ADD COLUMN senior         INTEGER;  -- 1 = poste explicitement senior / expert / lead
   ALTER TABLE offers ADD COLUMN niche_tech     INTEGER;  -- 1 = technologie de niche (développeur)
   `,
+  // 11 — Suivi des annonces depuis l'interface (#24)
+  `
+  ALTER TABLE offers ADD COLUMN seen_at    TEXT;  -- consultée (retire la pastille « nouveau »)
+  ALTER TABLE offers ADD COLUMN ignored_at TEXT;  -- ignorée : retirée de la liste
+  `,
 ];
 
 /** Ouvre la base (en la créant si besoin) et applique les migrations manquantes. */
@@ -319,4 +324,19 @@ export function setSetting(db: DatabaseSync, key: string, value: string): void {
     key,
     value,
   );
+}
+
+/** Marque une annonce consultée et renvoie l'adresse à ouvrir (directe si connue), ou null si inconnue. */
+export function markOfferSeen(db: DatabaseSync, id: number, now = new Date()): string | null {
+  const row = db.prepare("SELECT coalesce(page_url, url) AS url FROM offers WHERE id = ?").get(id) as
+    | { url: string }
+    | undefined;
+  if (!row) return null;
+  db.prepare("UPDATE offers SET seen_at = coalesce(seen_at, ?) WHERE id = ?").run(now.toISOString(), id);
+  return row.url;
+}
+
+/** Retire une annonce de la liste ; renvoie false si elle est inconnue. */
+export function ignoreOffer(db: DatabaseSync, id: number, now = new Date()): boolean {
+  return db.prepare("UPDATE offers SET ignored_at = ? WHERE id = ?").run(now.toISOString(), id).changes > 0;
 }

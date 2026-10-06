@@ -265,3 +265,30 @@ select { max-width: 280px; padding-right: 8px; }
   h1 { font-size: 1.9rem; }
   .ligne, .mail-a-classer { padding: 16px; }
 }
+
+/* Offres à regarder (#24) */
+.bouton-offres {
+  flex-shrink: 0;
+  border-color: var(--envoyee-fond);
+  background: var(--envoyee-fond);
+  color: var(--envoyee);
+  font-weight: 600;
+}
+.bouton-offres.sans-nouvelle { border-color: var(--bordure); background: var(--surface); color: var(--discret); font-weight: 400; }
+.bouton-offres:hover { text-decoration: none; filter: brightness(0.97); }
+.offre { padding: 18px 24px; }
+.offre .mail-date { margin-left: auto; }
+.offre .entreprise { font-family: var(--serif); }
+.pastille {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pastille-nouveau { background: var(--envoyee-fond); color: var(--envoyee); }
+.pastille-non-verifiee { background: var(--sans-reponse-fond); color: var(--sans-reponse); }
+.offres-stats { margin-top: 24px; color: var(--discret); font-size: 0.9rem; }
+@media (max-width: 600px) {
+  .offre { padding: 16px; }
+}

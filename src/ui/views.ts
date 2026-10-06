@@ -2,7 +2,7 @@
 // un objet de mail contenant du HTML s'affiche comme du texte, il ne s'exécute pas.
 
 import { html } from "hono/html";
-import type { CandidatureRow, CorrectionRow, DisplayStatus, MailRow, MailToClassify } from "./queries.js";
+import type { CandidatureRow, CorrectionRow, DisplayStatus, MailRow, MailToClassify, OfferRow, OfferStats } from "./queries.js";
 import { DISPLAY_STATUSES } from "./queries.js";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -111,6 +111,7 @@ export function listPage(
   filter: DisplayStatus | null,
   toClassifyCount = 0,
   lastSync: Date | null = null,
+  newOffers = 0,
 ) {
   const rows = filter ? all.filter((c) => c.status === filter) : all;
   const count = (s: DisplayStatus) => all.filter((c) => c.status === s).length;
@@ -141,6 +142,9 @@ export function listPage(
         </div>
         <div class="entete-actions">
           <a class="bouton bouton-discret" href="/corrections">Corrections</a>
+          <a class="bouton bouton-offres${newOffers === 0 ? " sans-nouvelle" : ""}" href="/offres"
+            >Offres <span class="compteur" title="nouvelles offres">${newOffers}</span></a
+          >
           <a class="bouton bouton-a-classer${toClassifyCount === 0 ? " vide-a-classer" : ""}" href="/a-classer"
             >À classer <span class="compteur">${toClassifyCount}</span></a
           >
@@ -173,6 +177,58 @@ export function listPage(
               )}
             </ul>`}
       </div>`,
+  );
+}
+
+/** Offres à regarder (#24) : annonces des alertes gardées par les filtres. */
+export function offersPage(offers: OfferRow[], stats: OfferStats) {
+  const rejected = stats.rejectedByTitle + stats.rejectedByClaude;
+  return layout(
+    "Offres à regarder",
+    html`<p class="retour"><a href="/">← Mes candidatures</a></p>
+      <header class="entete">
+        <h1>Offres à regarder</h1>
+        <p class="sous-titre">Annonces de tes alertes qui correspondent à ta recherche.</p>
+      </header>
+      ${offers.length === 0
+        ? html`<p class="vide">Aucune offre à regarder pour l'instant.</p>`
+        : html`<ul class="liste offres">
+            ${offers.map(
+              (o) => html`<li class="offre${o.isNew ? " offre-nouvelle" : ""}">
+                <div class="ligne-principale">
+                  <span class="entreprise">${o.title}</span>
+                  ${o.isNew ? html`<span class="pastille pastille-nouveau">nouveau</span>` : ""}
+                  ${o.unverified
+                    ? html`<span class="pastille pastille-non-verifiee" title="Page illisible : non triée par Claude"
+                        >non vérifiée</span
+                      >`
+                    : ""}
+                  <span class="mail-date">${date(o.receivedAt)}</span>
+                </div>
+                <div class="ligne-secondaire">
+                  <span>${o.company ?? "Entreprise inconnue"}</span>
+                  ${o.location ? html`<span>${o.location}</span>` : ""}
+                  ${o.contract ? html`<span>${o.contract}</span>` : ""}
+                </div>
+                ${o.justification ? html`<p class="mail-justification">${o.justification}</p>` : ""}
+                <div class="actions">
+                  <!-- Nouvel onglet : la consultation est enregistrée, puis l'annonce s'ouvre. -->
+                  <form method="post" action="/offres/${o.id}/consulter" target="_blank">
+                    <button type="submit" class="bouton bouton-principal">Consulter</button>
+                  </form>
+                  <form method="post" action="/offres/${o.id}/ignorer" hx-boost="true">
+                    <button type="submit" class="bouton bouton-discret">Ignorer</button>
+                  </form>
+                </div>
+              </li>`,
+            )}
+          </ul>`}
+      <p class="offres-stats">
+        ${rejected} annonce${rejected > 1 ? "s" : ""} écartée${rejected > 1 ? "s" : ""} ces 7 derniers jours
+        (${stats.rejectedByTitle} par l'intitulé, ${stats.rejectedByClaude} par Claude)${stats.pending
+          ? ` · ${stats.pending} en cours de tri`
+          : ""}.
+      </p>`,
   );
 }
 

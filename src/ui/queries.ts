@@ -198,3 +198,77 @@ export function listCorrections(db: DatabaseSync): CorrectionRow[] {
     return { id: r.id as number, createdAt: new Date(r.created_at as string), description: description[0].toUpperCase() + description.slice(1) };
   });
 }
+
+// --- Offres à regarder (#24) ---------------------------------------------------------------------
+
+export interface OfferRow {
+  id: number;
+  title: string;
+  company: string | null;
+  location: string | null;
+  contract: string | null;
+  receivedAt: Date;
+  justification: string | null;
+  /** Page illisible : pas de tri par Claude. */
+  unverified: boolean;
+  /** Pas encore consultée. */
+  isNew: boolean;
+}
+
+/** Gardées par Claude, ou non vérifiées (gardées par l'intitulé, page illisible) ; sans les ignorées. */
+const TO_SEE = `title_keep = 1 AND ignored_at IS NULL AND (verdict = 'garder' OR page_status = 'non_verifiee')`;
+
+export function listOffersToSee(db: DatabaseSync): OfferRow[] {
+  const rows = db
+    .prepare(
+      `SELECT id, title, company, location, contract, received_at, justification, page_status, seen_at
+       FROM offers WHERE ${TO_SEE} ORDER BY received_at DESC, id`,
+    )
+    .all() as {
+    id: number;
+    title: string;
+    company: string | null;
+    location: string | null;
+    contract: string | null;
+    received_at: string;
+    justification: string | null;
+    page_status: string | null;
+    seen_at: string | null;
+  }[];
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    company: r.company,
+    location: r.location,
+    contract: r.contract,
+    receivedAt: new Date(r.received_at),
+    justification: r.page_status === "non_verifiee" ? null : r.justification,
+    unverified: r.page_status === "non_verifiee",
+    isNew: r.seen_at === null,
+  }));
+}
+
+export function countNewOffers(db: DatabaseSync): number {
+  return (db.prepare(`SELECT count(*) AS n FROM offers WHERE ${TO_SEE} AND seen_at IS NULL`).get() as { n: number }).n;
+}
+
+export interface OfferStats {
+  /** Écartées ces 7 derniers jours par le filtre sur l'intitulé, puis par Claude. */
+  rejectedByTitle: number;
+  rejectedByClaude: number;
+  /** Gardées par l'intitulé, en attente de lecture de la page ou du tri par Claude. */
+  pending: number;
+}
+
+export function offerStats(db: DatabaseSync, now: Date): OfferStats {
+  const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const count = (where: string, ...params: string[]) =>
+    (db.prepare(`SELECT count(*) AS n FROM offers WHERE ${where}`).get(...params) as { n: number }).n;
+  return {
+    rejectedByTitle: count("title_keep = 0 AND received_at >= ?", since),
+    rejectedByClaude: count("verdict = 'ecarter' AND received_at >= ?", since),
+    pending: count(
+      "title_keep = 1 AND ignored_at IS NULL AND (page_status IS NULL OR (page_status = 'lue' AND verdict IS NULL))",
+    ),
+  };
+}

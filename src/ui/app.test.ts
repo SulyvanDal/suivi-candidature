@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { rebuildCandidatures } from "../candidatures.js";
-import { openDb, saveMailResult, saveSyncState } from "../db.js";
+import { openDb, saveMailResult, saveOffer, saveSyncState } from "../db.js";
 import { createApp } from "./app.js";
 import { displayStatus } from "./queries.js";
 
@@ -215,4 +215,81 @@ test("« ce n'est pas une candidature » puis annulation depuis la page Correcti
 
 test("annuler une correction inconnue : 404", async () => {
   assert.equal((await post(setup(), "/corrections/999/annuler")).status, 404);
+});
+
+// --- Offres à regarder (#24) ---------------------------------------------------------------------
+
+function offersSetup() {
+  const db = openDb(":memory:");
+  const add = (title: string, fields: Record<string, unknown>, day = "10-04") => {
+    saveOffer(
+      db,
+      { platform: "hellowork", title, company: "Exemple", location: "Paris", contract: "CDI", url: `https://suivi.example/${title}` },
+      { keep: fields.title_keep !== 0, rule: fields.title_keep === 0 ? "exclu" : "poste-recherche" },
+      { gmailId: "al", receivedAt: new Date(`2026-${day}T08:00:00Z`) },
+    );
+    const sets = Object.keys(fields).filter((k) => k !== "title_keep");
+    if (sets.length) {
+      db.prepare(`UPDATE offers SET ${sets.map((k) => `${k} = ?`).join(", ")} WHERE title = ?`).run(
+        ...sets.map((k) => fields[k] as string | number | null),
+        title,
+      );
+    }
+  };
+  add("Product Owner", { page_status: "lue", page_url: "https://www.hellowork.com/fr-fr/emplois/1.html", verdict: "garder", justification: "Junior accepté." }, "10-05");
+  add("Chef de projet Indeed", { page_status: "non_verifiee" });
+  add("PO Senior", { page_status: "lue", verdict: "ecarter", justification: "8 ans demandés." });
+  add("Stage PO", { title_keep: 0 });
+  add("PMO", { page_status: "lue" }); // pas encore jugée
+  add("Business Analyst", { page_status: "lue", verdict: "garder", ignored_at: "2026-10-05T10:00:00Z" });
+  return { db, app: createApp(db, () => NOW) };
+}
+
+test("offres : gardées par Claude et non vérifiées seulement, la plus récente en premier, compteurs", async () => {
+  const { app } = offersSetup();
+  const body = await (await app.request("/offres")).text();
+
+  const titles = [...body.matchAll(/<span class="entreprise">([^<]+)<\/span>/g)].map((m) => m[1]);
+  assert.deepEqual(titles, ["Product Owner", "Chef de projet Indeed"]);
+  assert.match(body, /Junior accepté\./);
+  assert.match(body, /non vérifiée/);
+  assert.equal((body.match(/pastille-nouveau/g) ?? []).length, 2);
+  assert.match(body, /2 annonces écartées ces 7 derniers jours\s+\(1 par l'intitulé, 1 par Claude\) · 1 en cours de tri/);
+
+  // Bouton de la page principale : nombre de nouvelles offres.
+  assert.match(await (await app.request("/")).text(), /Offres <span class="compteur" title="nouvelles offres">2<\/span>/);
+});
+
+test("offres : « Consulter » marque l'annonce vue et ouvre l'adresse directe (sinon le lien de l'alerte)", async () => {
+  const { db, app } = offersSetup();
+  const id = (title: string) => (db.prepare("SELECT id FROM offers WHERE title = ?").get(title) as { id: number }).id;
+
+  const res = await post(app, `/offres/${id("Product Owner")}/consulter`);
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get("location"), "https://www.hellowork.com/fr-fr/emplois/1.html");
+  const res2 = await post(app, `/offres/${id("Chef de projet Indeed")}/consulter`);
+  assert.equal(res2.headers.get("location"), "https://suivi.example/Chef de projet Indeed");
+
+  const body = await (await app.request("/offres")).text();
+  assert.doesNotMatch(body, /pastille-nouveau/);
+  assert.equal((await post(app, "/offres/9999/consulter")).status, 404);
+});
+
+test("offres : « Ignorer » retire l'annonce ; formulaire d'un autre site refusé", async () => {
+  const { db, app } = offersSetup();
+  const id = (db.prepare("SELECT id FROM offers WHERE title = 'Product Owner'").get() as { id: number }).id;
+
+  assert.equal((await post(app, `/offres/${id}/ignorer`, {}, "https://malveillant.example")).status, 403);
+  assert.match(await (await app.request("/offres")).text(), /Product Owner/);
+
+  const res = await post(app, `/offres/${id}/ignorer`);
+  assert.equal(res.status, 303);
+  assert.doesNotMatch(await (await app.request("/offres")).text(), />Product Owner</);
+});
+
+test("offres : seules les adresses web sont ouvertes", async () => {
+  const { db, app } = offersSetup();
+  db.prepare("UPDATE offers SET page_url = 'javascript:alert(1)' WHERE title = 'Product Owner'").run();
+  const id = (db.prepare("SELECT id FROM offers WHERE title = 'Product Owner'").get() as { id: number }).id;
+  assert.equal((await post(app, `/offres/${id}/consulter`)).status, 400);
 });

@@ -11,16 +11,19 @@ import {
   rebuildCandidatures,
   type Status,
 } from "../candidatures.js";
-import { getSyncState } from "../db.js";
+import { getSyncState, ignoreOffer, markOfferSeen } from "../db.js";
 import {
   DISPLAY_STATUSES,
   type DisplayStatus,
+  countNewOffers,
   getCandidature,
   listCandidatures,
   listCorrections,
+  listOffersToSee,
   listToClassify,
+  offerStats,
 } from "./queries.js";
-import { correctionsPage, detailPage, listPage, notFoundPage, toClassifyPage } from "./views.js";
+import { correctionsPage, detailPage, listPage, notFoundPage, offersPage, toClassifyPage } from "./views.js";
 
 const STATUSES: Status[] = ["Envoyée", "Entretien", "Offre", "Refus"];
 
@@ -40,7 +43,13 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date()):
     const filter = DISPLAY_STATUSES.includes(statut as DisplayStatus) ? (statut as DisplayStatus) : null;
     const lastSync = getSyncState(db)?.lastSyncAt;
     return c.html(
-      listPage(listCandidatures(db, now()), filter, listToClassify(db).length, lastSync ? new Date(lastSync) : null),
+      listPage(
+        listCandidatures(db, now()),
+        filter,
+        listToClassify(db).length,
+        lastSync ? new Date(lastSync) : null,
+        countNewOffers(db),
+      ),
     );
   });
 
@@ -110,6 +119,22 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date()):
     addCorrection(db, { kind: "pas_candidature", candidatureId: id }, label);
     rebuildCandidatures(db);
     return c.redirect("/", 303);
+  });
+
+  // Offres à regarder (#24).
+  app.get("/offres", (c) => c.html(offersPage(listOffersToSee(db), offerStats(db, now()))));
+
+  app.post("/offres/:id/consulter", (c) => {
+    const url = markOfferSeen(db, Number(c.req.param("id")), now());
+    if (!url) return c.text("Annonce inconnue", 404);
+    // L'adresse vient d'un mail : on ne redirige que vers une page web.
+    if (!/^https?:\/\//i.test(url)) return c.text("Adresse d'annonce invalide", 400);
+    return c.redirect(url, 303);
+  });
+
+  app.post("/offres/:id/ignorer", (c) => {
+    if (!ignoreOffer(db, Number(c.req.param("id")), now())) return c.text("Annonce inconnue", 404);
+    return c.redirect("/offres", 303);
   });
 
   app.get("/corrections", (c) => c.html(correctionsPage(listCorrections(db))));
