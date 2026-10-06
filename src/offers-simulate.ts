@@ -6,11 +6,11 @@
 // Ouvrir une annonce passe par le lien de suivi de la plateforme : elle peut compter ce « clic ».
 
 import { gmail } from "@googleapis/gmail";
-import { convert } from "html-to-text";
 import { getAuthorizedClient } from "./auth.js";
 import { loadTitleRules, openDb } from "./db.js";
 import { extractMail, htmlTextWithLinks } from "./extract.js";
 import { filterMail } from "./filter.js";
+import { type PageResult, readOfferPage } from "./offer-page.js";
 import { extractOffers, type Offer, platformOf, titleFilter } from "./offers.js";
 import { withRetry } from "./retry.js";
 import { gmailSource } from "./sync.js";
@@ -25,8 +25,6 @@ const PRICE_PER_MTOK = { input: 1, output: 5 };
 /** Consignes + profil du candidat, envoyés avec chaque annonce. */
 const PROMPT_TOKENS = 600;
 const OUTPUT_TOKENS = 120;
-/** Texte de l'annonce plafonné, comme pour les mails. */
-const MAX_TEXT_CHARS = 8000;
 const CHARS_PER_TOKEN = 3.5;
 /** Hypothèse de l'utilisateur : le volume d'annonces va doubler. */
 const VOLUME_FACTOR = 2;
@@ -78,9 +76,11 @@ for (const { offer: o, loose: a, strict: b } of [...decisions].sort((x, y) => x.
 
 const toRead = decisions.filter((d) => d.loose.keep).map((d) => d.offer);
 console.log(`\nLecture de ${toRead.length} page(s) d'annonce…`);
-const pages = new Map<Offer, Page>();
-await pool(toRead, 3, async (o) => {
-  pages.set(o, await readPage(o.url));
+const pages = new Map<Offer, PageResult>();
+// Une page à la fois avec une pause : en rafale, Hellowork répond 403.
+await pool(toRead, 1, async (o) => {
+  pages.set(o, await readOfferPage(o.url));
+  await new Promise((r) => setTimeout(r, 1000));
 });
 
 // --- 4. Bilan ------------------------------------------------------------------------------------
@@ -104,22 +104,25 @@ console.log(`Filtre 1, variante A (exclusion seule)    : ${keptA.length} gardée
 console.log(`Filtre 1, variante B (garder + exclure)   : ${keptB.length} gardée(s)`);
 
 console.log("\nPages d'annonce (variante A) :");
-const byHost = new Map<string, { ok: number; blocked: Map<string, number>; chars: number; jsonLd: number }>();
-for (const p of pages.values()) {
-  const h = byHost.get(p.host) ?? { ok: 0, blocked: new Map(), chars: 0, jsonLd: 0 };
-  if (p.ok) {
+const byHost = new Map<string, { ok: number; failed: Map<string, number>; chars: number }>();
+for (const [offer, p] of pages) {
+  const host = new URL(p.status === "a_reessayer" ? offer.url : p.url).host;
+  const h = byHost.get(host) ?? { ok: 0, failed: new Map(), chars: 0 };
+  if (p.status === "lue") {
     h.ok++;
-    h.chars += p.chars;
-    if (p.source === "json-ld") h.jsonLd++;
-  } else h.blocked.set(p.reason, (h.blocked.get(p.reason) ?? 0) + 1);
-  byHost.set(p.host, h);
+    h.chars += p.description.length;
+  } else {
+    const why = `${p.status === "a_reessayer" ? "à réessayer" : "non vérifiée"} (${p.error})`;
+    h.failed.set(why, (h.failed.get(why) ?? 0) + 1);
+  }
+  byHost.set(host, h);
 }
 for (const [host, h] of byHost) {
-  const blocked = [...h.blocked].map(([r, n]) => `${n} ${r}`).join(", ");
+  const failed = [...h.failed].map(([r, n]) => `${n} ${r}`).join(", ");
   console.log(
-    `  ${host.padEnd(32)} ${h.ok} lisible(s)` +
-      (h.ok ? ` (${Math.round(h.chars / h.ok)} car. en moyenne, ${h.jsonLd} via données structurées)` : "") +
-      (blocked ? ` · bloquée(s) : ${blocked}` : ""),
+    `  ${host.padEnd(32)} ${h.ok} lue(s)` +
+      (h.ok ? ` (description : ${Math.round(h.chars / h.ok)} car. en moyenne)` : "") +
+      (failed ? ` · ${failed}` : ""),
   );
 }
 
@@ -129,9 +132,9 @@ const cost = (kept: typeof decisions) => {
   let n = 0;
   for (const { offer } of kept) {
     const p = pages.get(offer);
-    if (!p?.ok) continue;
+    if (p?.status !== "lue") continue;
     n++;
-    input += PROMPT_TOKENS + Math.min(p.chars, MAX_TEXT_CHARS) / CHARS_PER_TOKEN;
+    input += PROMPT_TOKENS + p.description.length / CHARS_PER_TOKEN;
   }
   const dollars = (input * PRICE_PER_MTOK.input + n * OUTPUT_TOKENS * PRICE_PER_MTOK.output) / 1e6;
   return { n, dollars };
@@ -147,55 +150,6 @@ for (const [label, kept] of [["A", keptA], ["B", keptB]] as const) {
 }
 
 // --- Outils ---------------------------------------------------------------------------------------
-
-interface Page {
-  ok: boolean;
-  /** Domaine final, après les redirections du lien de suivi. */
-  host: string;
-  reason: string;
-  chars: number;
-  source: "json-ld" | "page" | null;
-}
-
-/** Ouvre une annonce (redirections suivies) et mesure le texte utile : données structurées JobPosting si présentes. */
-async function readPage(url: string): Promise<Page> {
-  let host = new URL(url).host;
-  try {
-    const res = await fetch(url, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(20_000),
-      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", "Accept-Language": "fr-FR,fr" },
-    });
-    host = new URL(res.url).host;
-    if (!res.ok) return { ok: false, host, reason: `HTTP ${res.status}`, chars: 0, source: null };
-    const html = await res.text();
-    const posting = jobPostingDescription(html);
-    const text = posting ?? convert(html, { wordwrap: false, selectors: [{ selector: "a", options: { ignoreHref: true } }, { selector: "img", format: "skip" }] });
-    if (/captcha|just a moment|verify you are human|access denied/i.test(text.slice(0, 3000)) || text.length < 300) {
-      return { ok: false, host, reason: "protection anti-robot", chars: 0, source: null };
-    }
-    return { ok: true, host, reason: "", chars: text.length, source: posting ? "json-ld" : "page" };
-  } catch (err) {
-    return { ok: false, host, reason: err instanceof Error && err.name === "TimeoutError" ? "délai dépassé" : "erreur réseau", chars: 0, source: null };
-  }
-}
-
-/** Description d'une annonce dans les données structurées schema.org (balise ld+json), en texte. */
-function jobPostingDescription(html: string): string | null {
-  for (const m of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
-    try {
-      const data = JSON.parse(m[1]);
-      const items: unknown[] = [data, ...(Array.isArray(data) ? data : []), ...(data?.["@graph"] ?? [])];
-      const job = items.find((i) => (i as { "@type"?: string })?.["@type"] === "JobPosting") as
-        | { title?: string; description?: string }
-        | undefined;
-      if (job?.description) return `${job.title ?? ""}\n${convert(job.description, { wordwrap: false })}`;
-    } catch {
-      // JSON invalide : on essaie la balise suivante.
-    }
-  }
-  return null;
-}
 
 /** Traite les éléments avec au plus `size` tâches en parallèle. */
 async function pool<T>(items: T[], size: number, task: (item: T) => Promise<void>): Promise<void> {

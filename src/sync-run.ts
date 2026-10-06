@@ -16,6 +16,7 @@ import { rebuildCandidatures } from "./candidatures.js";
 import { classifyMail, createClient, MODEL } from "./classify.js";
 import { openDb } from "./db.js";
 import { notify } from "./notify.js";
+import { readPendingPages } from "./offer-page.js";
 import { processMessage, type ProcessedMail } from "./pipeline.js";
 import { isOffline } from "./retry.js";
 import { fetchFullMessage, gmailSource, syncNewMessages } from "./sync.js";
@@ -64,6 +65,10 @@ async function main(): Promise<number> {
       budgetReached = true;
     }
 
+    // Pages des annonces gardées (#22), après les mails : un échec n'empêche pas leur traitement.
+    if (!auto) console.log("Lecture des pages d'annonce…");
+    const pages = await readPendingPages(db);
+
     const kept = processed.filter((p) => p.result);
     const relevant = kept.filter((p) => p.result!.classification.type !== "hors_sujet");
     const cost = (tokens.input * PRICE_PER_MTOK.input + tokens.output * PRICE_PER_MTOK.output) / 1e6;
@@ -80,7 +85,8 @@ async function main(): Promise<number> {
       console.log(
         `${stamp()} · synchronisation ${mode} · ${processed.length} mail(s), ${kept.length} envoyé(s) à Claude, ` +
           `${relevant.length} lié(s) à une candidature · ${cost.toFixed(3)} $ · ${candidatures.length} candidature(s) · ` +
-          `${offers.added} annonce(s), ${offers.kept} gardée(s)` +
+          `${offers.added} annonce(s), ${offers.kept} gardée(s) · ` +
+          `pages : ${pages.read} lue(s), ${pages.unverified} non vérifiée(s), ${pages.retry} à réessayer` +
           (gone.length ? ` · ${gone.length} mail(s) disparu(s) ignoré(s)` : "") +
           (budgetReached ? " · PLAFOND ATTEINT" : ""),
       );
@@ -90,6 +96,11 @@ async function main(): Promise<number> {
       console.log(`  Pré-filtre : ${kept.length} gardé(s), ${processed.length - kept.length} écarté(s).`);
       console.log(`  Claude : ${relevant.length} lié(s) à une candidature, ${kept.length - relevant.length} hors sujet.`);
       console.log(`  Annonces des alertes : ${offers.added} nouvelle(s), ${offers.kept} gardée(s) par le filtre sur l'intitulé.`);
+      console.log(
+        `  Pages d'annonce : ${pages.read} lue(s), ${pages.unverified} non vérifiée(s)` +
+          (pages.retry ? `, ${pages.retry} à réessayer plus tard` : "") +
+          ".",
+      );
       console.log(`  Coût estimé : ${cost.toFixed(3)} $ (${tokens.input} jetons en entrée, ${tokens.output} en sortie).`);
       if (relevant.length > 0) console.log("\nMails liés à une candidature :");
       for (const { mail, result } of relevant) {

@@ -159,8 +159,12 @@ lecture du corps des mails.
   ignoré) donnent des annonces, lues dans le HTML avec les liens complets (`htmlTextWithLinks`).
   Table `offers` : doublons (intitulé + entreprise sans casse ni accents) jamais réenregistrés,
   annonces écartées gardées (compteur, doublons). Filtre sur l'intitulé « garder + exclure » (mots
-  entiers, accents ignorés, `*` final), listes dans `offer_terms`. Suite : #22 description de la
-  page, #23 filtre par Claude (plafond 100/jour), #24 page « Offres à regarder », #25 édition des listes.
+  entiers, accents ignorés, `*` en fin de mot), listes dans `offer_terms`. Pages (#22,
+  `src/offer-page.ts`) lues en fin de synchronisation, une par seconde (403 en rafale) : seule la
+  description des données schema.org `JobPosting` (Hellowork écrit `ld&#x2B;json`), jamais la page
+  entière ; échec définitif → `non_verifiee` (403 Indeed, offre expirée, annonce APEC relayée ; pas
+  de traitement spécial des expirées, décision utilisateur), passager → retenté. Suite : #23 filtre par Claude (plafond 100/jour), #24 page
+  « Offres à regarder », #25 édition des listes.
 - `data/suivi.db` contient les **vraies données** depuis le premier passage du 05/10/2026
   (1 419 mails, 246 envoyés à Claude, 94 liés à une candidature, 0,49 $).
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est

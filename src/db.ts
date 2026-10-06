@@ -129,6 +129,14 @@ const MIGRATIONS: string[] = [
     ('exclu', 'stage'), ('exclu', 'alternance'), ('exclu', 'freelance'), ('exclu', 'senior'),
     ('exclu', 'tech lead'), ('exclu', 'intérim');
   `,
+  // 8 — Description lue sur la page de l'annonce (#22)
+  `
+  ALTER TABLE offers ADD COLUMN page_status  TEXT;  -- NULL = à lire | lue | non_verifiee
+  ALTER TABLE offers ADD COLUMN page_url     TEXT;  -- adresse finale, sans le lien de suivi
+  ALTER TABLE offers ADD COLUMN description  TEXT;
+  ALTER TABLE offers ADD COLUMN page_error   TEXT;  -- raison du dernier échec
+  ALTER TABLE offers ADD COLUMN page_read_at TEXT;
+  `,
 ];
 
 /** Ouvre la base (en la créant si besoin) et applique les migrations manquantes. */
