@@ -292,3 +292,45 @@ select { max-width: 280px; padding-right: 8px; }
 @media (max-width: 600px) {
   .offre { padding: 16px; }
 }
+
+/* Réglages des offres (#25) */
+.reglage { margin-top: 32px; }
+.reglage h2 { margin: 0 0 12px; font-family: var(--serif); font-size: 1.2rem; font-weight: 600; }
+.termes { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+.terme {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--bordure);
+}
+.terme form { margin: 0; }
+.retirer {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--discret);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.retirer:hover { background: var(--refus-fond); color: var(--refus); }
+.ajout-terme { display: flex; gap: 8px; max-width: 420px; }
+.ajout-terme input { flex: 1; }
+.formulaire textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid var(--bordure);
+  border-radius: 10px;
+  background: var(--fond);
+  color: var(--texte);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+.formulaire textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }

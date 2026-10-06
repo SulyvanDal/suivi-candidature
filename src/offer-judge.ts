@@ -51,15 +51,54 @@ export interface Ceilings {
 }
 export const DEFAULT_CEILINGS: Ceilings = { produitProjet: 4, developpeur: 2 };
 
+export const CEILING_KEYS = { produitProjet: "plafond_produit_projet", developpeur: "plafond_developpeur" } as const;
+
 export function loadCeilings(db: DatabaseSync): Ceilings {
   const read = (key: string, fallback: number) => {
     const raw = getSetting(db, key);
     return raw !== null && Number.isFinite(Number(raw)) ? Number(raw) : fallback;
   };
   return {
-    produitProjet: read("plafond_produit_projet", DEFAULT_CEILINGS.produitProjet),
-    developpeur: read("plafond_developpeur", DEFAULT_CEILINGS.developpeur),
+    produitProjet: read(CEILING_KEYS.produitProjet, DEFAULT_CEILINGS.produitProjet),
+    developpeur: read(CEILING_KEYS.developpeur, DEFAULT_CEILINGS.developpeur),
   };
+}
+
+/**
+ * Recalcule la décision des annonces déjà triées à partir des faits enregistrés (après un
+ * changement de plafond, #25) : gratuit, Claude n'est pas rappelé. Renvoie le nombre de changements.
+ */
+export function recomputeVerdicts(db: DatabaseSync): number {
+  const ceilings = loadCeilings(db);
+  const rows = db
+    .prepare(
+      `SELECT id, verdict, job_type, experience_min, senior, niche_tech FROM offers
+       WHERE verdict IS NOT NULL AND job_type IS NOT NULL`,
+    )
+    .all() as {
+    id: number;
+    verdict: string;
+    job_type: OfferFacts["type_poste"];
+    experience_min: number | null;
+    senior: number;
+    niche_tech: number;
+  }[];
+  let changed = 0;
+  for (const r of rows) {
+    const { decision, raison } = decide(
+      {
+        type_poste: r.job_type,
+        experience_min_ans: r.experience_min,
+        profil_senior: r.senior === 1,
+        techno_niche: r.niche_tech === 1,
+        justification: "",
+      },
+      ceilings,
+    );
+    if (decision !== r.verdict) changed++;
+    db.prepare("UPDATE offers SET verdict = ?, verdict_reason = ? WHERE id = ?").run(decision, raison, r.id);
+  }
+  return changed;
 }
 
 /** Règles de tri de l'utilisateur, appliquées aux faits extraits par Claude. */

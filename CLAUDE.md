@@ -175,7 +175,9 @@ lecture du corps des mails.
   annonces gardées par Claude + non vérifiées, sans les ignorées ; « Consulter » (formulaire
   `target=_blank` → `seen_at`, redirection vers `page_url` sinon le lien de suivi, http(s) seulement),
   « Ignorer » (`ignored_at`) ; compteurs des écartées sur 7 jours et des annonces en cours de tri.
-  Suite : #25 édition des listes, du profil et des plafonds.
+  Réglages (#25, `/offres/reglages`) : termes des deux listes (ajout, retrait), profil (vide refusé),
+  plafonds (0 à 30 ans ; un changement recalcule aussitôt les décisions existantes à partir des faits
+  enregistrés, `recomputeVerdicts`, sans rappeler Claude). Listes et profil : prochaines annonces seulement.
 - `data/suivi.db` contient les **vraies données** depuis le premier passage du 05/10/2026
   (1 419 mails, 246 envoyés à Claude, 94 liés à une candidature, 0,49 $).
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est

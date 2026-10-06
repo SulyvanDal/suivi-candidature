@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { rebuildCandidatures } from "../candidatures.js";
-import { openDb, saveMailResult, saveOffer, saveSyncState } from "../db.js";
+import { getSetting, loadTitleRules, openDb, PROFILE_KEY, saveMailResult, saveOffer, saveSyncState } from "../db.js";
+import { loadCeilings } from "../offer-judge.js";
 import { createApp } from "./app.js";
 import { displayStatus } from "./queries.js";
 
@@ -292,4 +293,52 @@ test("offres : seules les adresses web sont ouvertes", async () => {
   db.prepare("UPDATE offers SET page_url = 'javascript:alert(1)' WHERE title = 'Product Owner'").run();
   const id = (db.prepare("SELECT id FROM offers WHERE title = 'Product Owner'").get() as { id: number }).id;
   assert.equal((await post(app, `/offres/${id}/consulter`)).status, 400);
+});
+
+// --- Réglages des offres (#25) -------------------------------------------------------------------
+
+test("réglages : ajout et retrait d'un terme, terme vide refusé", async () => {
+  const { db, app } = offersSetup();
+  assert.match(await (await app.request("/offres/reglages")).text(), /chef de projet\*/);
+
+  assert.equal((await post(app, "/offres/reglages/termes/ajouter", { kind: "poste", term: "  coordinat*   de projet* " })).status, 303);
+  assert.ok(loadTitleRules(db).keep.includes("coordinat* de projet*"));
+  await post(app, "/offres/reglages/termes/retirer", { kind: "exclu", term: "senior" });
+  assert.ok(!loadTitleRules(db).exclude.includes("senior"));
+
+  const refused = await post(app, "/offres/reglages/termes/ajouter", { kind: "exclu", term: "   " });
+  assert.equal(refused.headers.get("location"), "/offres/reglages?message=terme");
+  assert.equal((await post(app, "/offres/reglages/termes/ajouter", { kind: "autre", term: "x" })).status, 400);
+});
+
+test("réglages : profil enregistré, profil vide refusé", async () => {
+  const { db, app } = offersSetup();
+  await post(app, "/offres/reglages/profil", { profil: "Développeur junior React." });
+  assert.equal(getSetting(db, PROFILE_KEY), "Développeur junior React.");
+  const refused = await post(app, "/offres/reglages/profil", { profil: "  " });
+  assert.equal(refused.headers.get("location"), "/offres/reglages?message=profil");
+  assert.equal(getSetting(db, PROFILE_KEY), "Développeur junior React.");
+});
+
+test("réglages : plafond modifié → décisions déjà prises recalculées sans Claude ; valeur invalide refusée", async () => {
+  const { db, app } = offersSetup();
+  // « PO Senior » a été écarté car il exige 5 ans (plafond 4).
+  db.prepare("UPDATE offers SET job_type = 'produit_projet', experience_min = 5, senior = 0, niche_tech = 0 WHERE title = 'PO Senior'").run();
+  assert.doesNotMatch(await (await app.request("/offres")).text(), />PO Senior</);
+
+  await post(app, "/offres/reglages/plafonds", { produit_projet: "5", developpeur: "2,5" });
+  assert.deepEqual(loadCeilings(db), { produitProjet: 5, developpeur: 2.5 });
+  assert.match(await (await app.request("/offres")).text(), />PO Senior</);
+
+  const refused = await post(app, "/offres/reglages/plafonds", { produit_projet: "-1", developpeur: "2" });
+  assert.equal(refused.headers.get("location"), "/offres/reglages?message=plafond");
+  assert.equal((await post(app, "/offres/reglages/plafonds", { produit_projet: "", developpeur: "2" })).headers.get("location"), "/offres/reglages?message=plafond");
+  assert.deepEqual(loadCeilings(db), { produitProjet: 5, developpeur: 2.5 });
+});
+
+test("réglages : formulaire venant d'un autre site refusé", async () => {
+  const { db, app } = offersSetup();
+  const res = await post(app, "/offres/reglages/profil", { profil: "piège" }, "https://malveillant.example");
+  assert.equal(res.status, 403);
+  assert.equal(getSetting(db, PROFILE_KEY), null);
 });

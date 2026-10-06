@@ -186,9 +186,14 @@ export function offersPage(offers: OfferRow[], stats: OfferStats) {
   return layout(
     "Offres à regarder",
     html`<p class="retour"><a href="/">← Mes candidatures</a></p>
-      <header class="entete">
-        <h1>Offres à regarder</h1>
-        <p class="sous-titre">Annonces de tes alertes qui correspondent à ta recherche.</p>
+      <header class="entete entete-liste">
+        <div>
+          <h1>Offres à regarder</h1>
+          <p class="sous-titre">Annonces de tes alertes qui correspondent à ta recherche.</p>
+        </div>
+        <div class="entete-actions">
+          <a class="bouton bouton-discret" href="/offres/reglages">Réglages</a>
+        </div>
       </header>
       ${offers.length === 0
         ? html`<p class="vide">Aucune offre à regarder pour l'instant.</p>`
@@ -229,6 +234,86 @@ export function offersPage(offers: OfferRow[], stats: OfferStats) {
           ? ` · ${stats.pending} en cours de tri`
           : ""}.
       </p>`,
+  );
+}
+
+export interface OfferSettings {
+  keep: string[];
+  exclude: string[];
+  profile: string;
+  ceilings: { produitProjet: number; developpeur: number };
+  /** Message après une action (erreur ou confirmation). */
+  message: string | null;
+}
+
+/** Réglages de la veille des offres (#25) : listes du filtre, profil, plafonds. */
+export function offerSettingsPage(s: OfferSettings) {
+  const termList = (kind: "poste" | "exclu", title: string, terms: string[], placeholder: string) => html`<section
+    class="reglage"
+  >
+    <h2>${title}</h2>
+    ${terms.length === 0
+      ? html`<p class="vide">Liste vide.</p>`
+      : html`<ul class="termes">
+          ${terms.map(
+            (t) => html`<li class="terme">
+              <span>${t}</span>
+              <form method="post" action="/offres/reglages/termes/retirer">
+                <input type="hidden" name="kind" value="${kind}" />
+                <input type="hidden" name="term" value="${t}" />
+                <button type="submit" class="retirer" aria-label="Retirer ${t}" title="Retirer">×</button>
+              </form>
+            </li>`,
+          )}
+        </ul>`}
+    <form class="formulaire ajout-terme" method="post" action="/offres/reglages/termes/ajouter">
+      <input type="hidden" name="kind" value="${kind}" />
+      <input type="text" name="term" required maxlength="60" placeholder="${placeholder}" aria-label="Terme à ajouter" />
+      <button type="submit" class="bouton">Ajouter</button>
+    </form>
+  </section>`;
+
+  return layout(
+    "Réglages des offres",
+    html`<p class="retour"><a href="/offres">← Offres à regarder</a></p>
+      <header class="entete">
+        <h1>Réglages des offres</h1>
+        <p class="sous-titre">Ce qui décide des annonces affichées.</p>
+      </header>
+      ${s.message ? html`<p class="alerte">${s.message}</p>` : ""}
+      <div hx-boost="true">
+        <p class="aide">
+          Filtre sur l'intitulé : mots entiers, accents ignorés, « * » en fin de mot pour toutes les terminaisons
+          (« chef de projet* »). Les changements s'appliquent aux prochaines annonces.
+        </p>
+        ${termList("poste", "Postes recherchés", s.keep, "ex. product owner")}
+        ${termList("exclu", "Mots exclus (intitulé ou contrat)", s.exclude, "ex. alternance")}
+
+        <section class="reglage">
+          <h2>Plafonds d'expérience demandée</h2>
+          <form class="infos formulaire" method="post" action="/offres/reglages/plafonds">
+            <label class="info"
+              ><span class="libelle">Produit / projet (années)</span
+              ><input type="number" name="produit_projet" min="0" max="30" step="0.5" value="${s.ceilings.produitProjet}" required
+            /></label>
+            <label class="info"
+              ><span class="libelle">Développeur (années)</span
+              ><input type="number" name="developpeur" min="0" max="30" step="0.5" value="${s.ceilings.developpeur}" required
+            /></label>
+            <p class="aide-formulaire">Une annonce qui exige plus que le plafond est écartée. Appliqué aussi aux annonces déjà triées.</p>
+            <div class="actions"><button type="submit" class="bouton bouton-principal">Enregistrer</button></div>
+          </form>
+        </section>
+
+        <section class="reglage">
+          <h2>Profil envoyé à Claude</h2>
+          <form class="formulaire" method="post" action="/offres/reglages/profil">
+            <textarea name="profil" rows="14" required aria-label="Profil du candidat">${s.profile}</textarea>
+            <p class="aide-formulaire">Sert à reconnaître le type de poste. Appliqué aux prochaines annonces uniquement.</p>
+            <div class="actions"><button type="submit" class="bouton bouton-principal">Enregistrer</button></div>
+          </form>
+        </section>
+      </div>`,
   );
 }
 

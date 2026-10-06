@@ -340,3 +340,14 @@ export function markOfferSeen(db: DatabaseSync, id: number, now = new Date()): s
 export function ignoreOffer(db: DatabaseSync, id: number, now = new Date()): boolean {
   return db.prepare("UPDATE offers SET ignored_at = ? WHERE id = ?").run(now.toISOString(), id).changes > 0;
 }
+
+export type TermKind = "poste" | "exclu";
+
+/** Ajoute un terme au filtre sur l'intitulé ; sans effet s'il y est déjà. */
+export function addOfferTerm(db: DatabaseSync, kind: TermKind, term: string): void {
+  db.prepare("INSERT OR IGNORE INTO offer_terms (kind, term) VALUES (?, ?)").run(kind, term);
+}
+
+export function removeOfferTerm(db: DatabaseSync, kind: TermKind, term: string): void {
+  db.prepare("DELETE FROM offer_terms WHERE kind = ? AND term = ?").run(kind, term);
+}

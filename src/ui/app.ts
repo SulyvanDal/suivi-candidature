@@ -2,7 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { csrf } from "hono/csrf";
 import {
   addCorrection,
@@ -11,7 +11,19 @@ import {
   rebuildCandidatures,
   type Status,
 } from "../candidatures.js";
-import { getSyncState, ignoreOffer, markOfferSeen } from "../db.js";
+import {
+  addOfferTerm,
+  getSetting,
+  getSyncState,
+  ignoreOffer,
+  loadTitleRules,
+  markOfferSeen,
+  PROFILE_KEY,
+  removeOfferTerm,
+  setSetting,
+  type TermKind,
+} from "../db.js";
+import { CEILING_KEYS, loadCeilings, recomputeVerdicts } from "../offer-judge.js";
 import {
   DISPLAY_STATUSES,
   type DisplayStatus,
@@ -23,7 +35,15 @@ import {
   listToClassify,
   offerStats,
 } from "./queries.js";
-import { correctionsPage, detailPage, listPage, notFoundPage, offersPage, toClassifyPage } from "./views.js";
+import {
+  correctionsPage,
+  detailPage,
+  listPage,
+  notFoundPage,
+  offerSettingsPage,
+  offersPage,
+  toClassifyPage,
+} from "./views.js";
 
 const STATUSES: Status[] = ["Envoyée", "Entretien", "Offre", "Refus"];
 
@@ -135,6 +155,68 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date()):
   app.post("/offres/:id/ignorer", (c) => {
     if (!ignoreOffer(db, Number(c.req.param("id")), now())) return c.text("Annonce inconnue", 404);
     return c.redirect("/offres", 303);
+  });
+
+  // Réglages des offres (#25). Les messages passent par l'adresse (codes fixes, jamais de texte libre).
+  const MESSAGES: Record<string, string> = {
+    terme: "Terme refusé : il doit faire entre 1 et 60 caractères.",
+    profil: "Le profil ne peut pas être vide : sans lui, les annonces ne seraient plus triées.",
+    plafond: "Plafond refusé : un nombre d'années entre 0 et 30 est attendu.",
+    plafonds: "Plafonds enregistrés.",
+    "profil-ok": "Profil enregistré.",
+  };
+  app.get("/offres/reglages", (c) => {
+    const rules = loadTitleRules(db);
+    return c.html(
+      offerSettingsPage({
+        keep: rules.keep,
+        exclude: rules.exclude,
+        profile: getSetting(db, PROFILE_KEY) ?? "",
+        ceilings: loadCeilings(db),
+        message: MESSAGES[c.req.query("message") ?? ""] ?? null,
+      }),
+    );
+  });
+
+  const termForm = async (c: Context) => {
+    const body = await c.req.parseBody();
+    const kind: TermKind | null = body.kind === "poste" || body.kind === "exclu" ? body.kind : null;
+    const term = typeof body.term === "string" ? body.term.trim().replace(/\s+/g, " ") : "";
+    return { kind, term };
+  };
+  app.post("/offres/reglages/termes/ajouter", async (c) => {
+    const { kind, term } = await termForm(c);
+    if (!kind) return c.text("Liste inconnue", 400);
+    if (!term || term.length > 60) return c.redirect("/offres/reglages?message=terme", 303);
+    addOfferTerm(db, kind, term);
+    return c.redirect("/offres/reglages", 303);
+  });
+  app.post("/offres/reglages/termes/retirer", async (c) => {
+    const { kind, term } = await termForm(c);
+    if (!kind) return c.text("Liste inconnue", 400);
+    removeOfferTerm(db, kind, term);
+    return c.redirect("/offres/reglages", 303);
+  });
+
+  app.post("/offres/reglages/profil", async (c) => {
+    const profile = String((await c.req.parseBody()).profil ?? "").trim();
+    if (!profile) return c.redirect("/offres/reglages?message=profil", 303);
+    setSetting(db, PROFILE_KEY, profile);
+    return c.redirect("/offres/reglages?message=profil-ok", 303);
+  });
+
+  app.post("/offres/reglages/plafonds", async (c) => {
+    const body = await c.req.parseBody();
+    const values = [body.produit_projet, body.developpeur].map((v) => Number(String(v ?? "").replace(",", ".")));
+    if ([body.produit_projet, body.developpeur].some((v) => String(v ?? "").trim() === "") ||
+        values.some((v) => !Number.isFinite(v) || v < 0 || v > 30)) {
+      return c.redirect("/offres/reglages?message=plafond", 303);
+    }
+    setSetting(db, CEILING_KEYS.produitProjet, String(values[0]));
+    setSetting(db, CEILING_KEYS.developpeur, String(values[1]));
+    // Les faits relevés par Claude sont gardés : les décisions se recalculent sans le rappeler.
+    recomputeVerdicts(db);
+    return c.redirect("/offres/reglages?message=plafonds", 303);
   });
 
   app.get("/corrections", (c) => c.html(correctionsPage(listCorrections(db))));
