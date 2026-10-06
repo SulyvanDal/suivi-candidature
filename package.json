@@ -11,6 +11,7 @@
     "filter": "tsx src/filter-run.ts",
     "offres:simuler": "tsx src/offers-simulate.ts",
     "eval:classify": "tsx src/classify-eval.ts",
+    "eval:offres": "tsx src/offer-judge-eval.ts",
     "reanalyse": "tsx src/reanalyse.ts",
     "candidatures": "tsx src/candidatures-run.ts",
     "test": "tsx --test \"src/**/*.test.ts\"",

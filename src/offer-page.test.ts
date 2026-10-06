@@ -25,10 +25,10 @@ const fakeFetch = (body: string, status = 200, finalUrl = "https://www.exemple.c
     return res;
   }) as unknown as typeof fetch;
 
-test("description : données JobPosting en texte, balise écrite « ld&#x2B;json », expérience ajoutée", () => {
+test("description : données JobPosting en texte, balise écrite « ld&#x2B;json », sans le champ d'expérience", () => {
   const text = jobPostingText(page(POSTING))!;
   assert.match(text, /Rédiger les user stories\.\nAnimer les rituels\./);
-  assert.match(text, /Expérience demandée : 24 mois$/);
+  assert.doesNotMatch(text, /24 mois/, "champ experienceRequirements non repris (peu fiable)");
   assert.doesNotMatch(text, /Menu|https:\/\/x/, "ni la page autour, ni les liens");
 });
 

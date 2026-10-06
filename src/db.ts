@@ -137,6 +137,27 @@ const MIGRATIONS: string[] = [
   ALTER TABLE offers ADD COLUMN page_error   TEXT;  -- raison du dernier échec
   ALTER TABLE offers ADD COLUMN page_read_at TEXT;
   `,
+  // 9 — Jugement des annonces par Claude, profil du candidat (#23)
+  `
+  -- Réglages modifiables depuis l'interface (#25) : profil du candidat… Jamais dans le code.
+  CREATE TABLE settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
+  ALTER TABLE offers ADD COLUMN verdict        TEXT;  -- garder | ecarter ; NULL = pas encore jugée
+  ALTER TABLE offers ADD COLUMN verdict_reason TEXT;  -- correspond | seniorite | hors_cible
+  ALTER TABLE offers ADD COLUMN justification  TEXT;
+  ALTER TABLE offers ADD COLUMN model          TEXT;
+  ALTER TABLE offers ADD COLUMN judged_at      TEXT;
+  `,
+  // 10 — Faits extraits par Claude, d'où le code tire la décision (#23)
+  `
+  ALTER TABLE offers ADD COLUMN job_type       TEXT;     -- produit_projet | developpeur | autre
+  ALTER TABLE offers ADD COLUMN experience_min REAL;     -- années minimales exigées ; NULL = non chiffré
+  ALTER TABLE offers ADD COLUMN senior         INTEGER;  -- 1 = poste explicitement senior / expert / lead
+  ALTER TABLE offers ADD COLUMN niche_tech     INTEGER;  -- 1 = technologie de niche (développeur)
+  `,
 ];
 
 /** Ouvre la base (en la créant si besoin) et applique les migrations manquantes. */
@@ -283,4 +304,19 @@ export function saveOffer(
       new Date().toISOString(),
     );
   return changes > 0;
+}
+
+/** Profil du candidat envoyé à Claude pour juger les annonces (#23). */
+export const PROFILE_KEY = "profil_candidat";
+
+export function getSetting(db: DatabaseSync, key: string): string | null {
+  const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+export function setSetting(db: DatabaseSync, key: string, value: string): void {
+  db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").run(
+    key,
+    value,
+  );
 }

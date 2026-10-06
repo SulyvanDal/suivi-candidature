@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { getSyncState, isProcessed, loadTitleRules, markProcessed, openDb, saveSyncState } from "./db.js";
+import { getSetting, getSyncState, isProcessed, loadTitleRules, markProcessed, openDb, PROFILE_KEY, saveSyncState, setSetting } from "./db.js";
 
 // Chaque test travaille dans un dossier temporaire, supprimé à la fin.
 const tmp = mkdtempSync(join(tmpdir(), "suivi-db-"));
@@ -23,6 +23,7 @@ test("crée la base, son dossier et le schéma", () => {
     "offer_terms",
     "offers",
     "processed_messages",
+    "settings",
     "sync_state",
   ]);
   db.close();
@@ -69,4 +70,12 @@ test("listes de départ du filtre sur l'intitulé (#21)", () => {
   assert.ok(rules.keep.includes("product owner"));
   assert.ok(rules.exclude.includes("intérim"));
   assert.equal(rules.keep.length + rules.exclude.length, 19);
+});
+
+test("réglages : lecture, écriture, remplacement", () => {
+  const db = openDb(":memory:");
+  assert.equal(getSetting(db, PROFILE_KEY), null);
+  setSetting(db, PROFILE_KEY, "v1");
+  setSetting(db, PROFILE_KEY, "v2");
+  assert.equal(getSetting(db, PROFILE_KEY), "v2");
 });

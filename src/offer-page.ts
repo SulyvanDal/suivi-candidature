@@ -44,7 +44,6 @@ export async function readOfferPage(url: string, fetchPage: typeof fetch = fetch
 interface JobPosting {
   "@type"?: string | string[];
   description?: string;
-  experienceRequirements?: string | { monthsOfExperience?: number; description?: string };
 }
 
 /** Description de l'annonce (données JobPosting) en texte, plafonnée ; null si absente. */
@@ -60,15 +59,15 @@ export function jobPostingText(html: string): string | null {
     const job = candidates(data).find((i) => [i["@type"]].flat().includes("JobPosting"));
     if (!job?.description) continue;
 
-    let text = convert(job.description, {
+    const text = convert(job.description, {
       wordwrap: false,
       selectors: [
         { selector: "a", options: { ignoreHref: true } },
         { selector: "img", format: "skip" },
       ],
     }).replace(/\n{3,}/g, "\n\n").trim();
-    const xp = experience(job.experienceRequirements);
-    if (xp) text += `\n\nExpérience demandée : ${xp}`;
+    // Le champ experienceRequirements n'est pas repris : Hellowork y met « 12 mois » même quand
+    // l'annonce demande 5 ans. Seul le texte de l'annonce fait foi.
     return text.length > MAX_DESCRIPTION_CHARS ? `${text.slice(0, MAX_DESCRIPTION_CHARS)}…` : text;
   }
   return null;
@@ -80,13 +79,6 @@ function candidates(data: unknown): JobPosting[] {
   if (!data || typeof data !== "object") return [];
   const graph = (data as { "@graph"?: unknown })["@graph"];
   return [data as JobPosting, ...(graph ? candidates(graph) : [])];
-}
-
-function experience(x: JobPosting["experienceRequirements"]): string | null {
-  if (!x) return null;
-  if (typeof x === "string") return x;
-  if (x.monthsOfExperience !== undefined) return `${x.monthsOfExperience} mois`;
-  return x.description ?? null;
 }
 
 /**

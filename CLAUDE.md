@@ -40,6 +40,7 @@ lecture du corps des mails.
 - `npm run offres:simuler -- --days 14` : simulation de la veille des offres (#20) : annonces des
   alertes, filtre sur l'intitulé, lecture des pages, coût estimé. Sans Claude ; ouvre les liens de
   suivi des plateformes (comptés comme des clics).
+- `npm run eval:offres` : évalue le tri des annonces sur le jeu annoté (appelle Claude, ~0,17 $).
 - `npm run eval:classify` : évalue la classification et l'extraction sur le jeu annoté
   (appelle Claude, ~0,18 $).
 - `npm run reanalyse` : repasse à Claude les mails déjà gardés par le pré-filtre et met la base
@@ -163,8 +164,14 @@ lecture du corps des mails.
   `src/offer-page.ts`) lues en fin de synchronisation, une par seconde (403 en rafale) : seule la
   description des données schema.org `JobPosting` (Hellowork écrit `ld&#x2B;json`), jamais la page
   entière ; échec définitif → `non_verifiee` (403 Indeed, offre expirée, annonce APEC relayée ; pas
-  de traitement spécial des expirées, décision utilisateur), passager → retenté. Suite : #23 filtre par Claude (plafond 100/jour), #24 page
-  « Offres à regarder », #25 édition des listes.
+  de traitement spécial des expirées, décision utilisateur), passager → retenté. Tri (#23,
+  `src/offer-judge.ts`) : **Claude extrait, le code décide** (Haiku comparait mal les durées :
+  35-37/53 en le laissant juger, 50/53 ainsi). Faits : type de poste, expérience minimale chiffrée,
+  poste explicitement senior, techno de niche ; `decide` compare au plafond (4 ans produit/projet,
+  2 ans développeur, égalité gardée, réglages `plafond_*`), « confirmé » sans durée gardé. Profil
+  du candidat dans `settings` (jamais dans le code), 100 annonces jugées par jour au plus, sur la
+  journée entière. Champ `experienceRequirements` ignoré (Hellowork y met « 12 mois » par défaut).
+  Suite : #24 page « Offres à regarder », #25 édition des listes, du profil et des plafonds.
 - `data/suivi.db` contient les **vraies données** depuis le premier passage du 05/10/2026
   (1 419 mails, 246 envoyés à Claude, 94 liés à une candidature, 0,49 $).
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est

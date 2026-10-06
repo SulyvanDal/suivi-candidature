@@ -14,8 +14,9 @@ import { AuthorizationRequiredError, getAuthorizedClient } from "./auth.js";
 import { DailyBudgetReachedError, withBudget } from "./budget.js";
 import { rebuildCandidatures } from "./candidatures.js";
 import { classifyMail, createClient, MODEL } from "./classify.js";
-import { openDb } from "./db.js";
+import { getSetting, openDb, PROFILE_KEY } from "./db.js";
 import { notify } from "./notify.js";
+import { DAILY_OFFER_LIMIT, judgeOffer, judgePendingOffers } from "./offer-judge.js";
 import { readPendingPages } from "./offer-page.js";
 import { processMessage, type ProcessedMail } from "./pipeline.js";
 import { isOffline } from "./retry.js";
@@ -69,6 +70,15 @@ async function main(): Promise<number> {
     if (!auto) console.log("Lecture des pages d'annonce…");
     const pages = await readPendingPages(db);
 
+    // Tri des annonces lues par Claude (#23), plafonné par jour ; sans profil, rien n'est envoyé.
+    const profile = getSetting(db, PROFILE_KEY);
+    if (!auto && profile) console.log("Tri des annonces par Claude…");
+    const judged = profile ? await judgePendingOffers(db, (o) => judgeOffer(claude, profile, o)) : null;
+    if (judged) {
+      tokens.input += judged.inputTokens;
+      tokens.output += judged.outputTokens;
+    }
+
     const kept = processed.filter((p) => p.result);
     const relevant = kept.filter((p) => p.result!.classification.type !== "hors_sujet");
     const cost = (tokens.input * PRICE_PER_MTOK.input + tokens.output * PRICE_PER_MTOK.output) / 1e6;
@@ -86,7 +96,10 @@ async function main(): Promise<number> {
         `${stamp()} · synchronisation ${mode} · ${processed.length} mail(s), ${kept.length} envoyé(s) à Claude, ` +
           `${relevant.length} lié(s) à une candidature · ${cost.toFixed(3)} $ · ${candidatures.length} candidature(s) · ` +
           `${offers.added} annonce(s), ${offers.kept} gardée(s) · ` +
-          `pages : ${pages.read} lue(s), ${pages.unverified} non vérifiée(s), ${pages.retry} à réessayer` +
+          `pages : ${pages.read} lue(s), ${pages.unverified} non vérifiée(s), ${pages.retry} à réessayer · ` +
+          (judged
+            ? `tri : ${judged.kept} gardée(s), ${judged.rejected} écartée(s), ${judged.waiting} en attente`
+            : "tri : profil absent") +
           (gone.length ? ` · ${gone.length} mail(s) disparu(s) ignoré(s)` : "") +
           (budgetReached ? " · PLAFOND ATTEINT" : ""),
       );
@@ -100,6 +113,13 @@ async function main(): Promise<number> {
         `  Pages d'annonce : ${pages.read} lue(s), ${pages.unverified} non vérifiée(s)` +
           (pages.retry ? `, ${pages.retry} à réessayer plus tard` : "") +
           ".",
+      );
+      console.log(
+        judged
+          ? `  Tri par Claude : ${judged.kept} annonce(s) gardée(s), ${judged.rejected} écartée(s)` +
+              (judged.waiting ? `, ${judged.waiting} en attente (plafond de ${DAILY_OFFER_LIMIT} par jour)` : "") +
+              "."
+          : "  Tri par Claude : profil du candidat absent, annonces non triées.",
       );
       console.log(`  Coût estimé : ${cost.toFixed(3)} $ (${tokens.input} jetons en entrée, ${tokens.output} en sortie).`);
       if (relevant.length > 0) console.log("\nMails liés à une candidature :");
