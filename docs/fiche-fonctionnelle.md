@@ -90,6 +90,7 @@ manuelle ne doit jamais être écrasée par une analyse automatique ultérieure.
 
 ## Hors périmètre
 
-- Recherche d'offres et envoi de candidatures.
+- Envoi de candidatures.
+- Recherche d'offres : traitée à part, voir [fiche-offres.md](fiche-offres.md) (#20).
 - Autres messageries que Gmail.
 - Partage avec d'autres personnes.

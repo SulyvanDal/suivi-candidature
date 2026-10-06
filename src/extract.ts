@@ -41,6 +41,20 @@ export function extractMail(message: gmail_v1.Schema$Message): ExtractedMail {
   };
 }
 
+/** HTML brut du mail (première partie text/html), avec les liens intacts ; "" s'il n'y en a pas. */
+export function mailHtml(message: gmail_v1.Schema$Message): string {
+  const find = (part: Part): string => {
+    if (part.filename) return "";
+    if (part.mimeType?.toLowerCase() === "text/html") return decodeBody(part);
+    for (const child of part.parts ?? []) {
+      const found = find(child);
+      if (found) return found;
+    }
+    return "";
+  };
+  return find(message.payload ?? {});
+}
+
 function partText(part: Part): string {
   // Pièce jointe (y compris un .txt joint) : ignorée.
   if (part.filename) return "";
@@ -121,10 +135,20 @@ const MAX_URL_LENGTH = 100;
 
 /** Normalise les espaces et les lignes vides, raccourcit les URLs de suivi. */
 function clean(text: string): string {
-  return text
-    .replace(/https?:\/\/[^\s<>\[\]"]+/g, (url) =>
+  return normalize(
+    text.replace(/https?:\/\/[^\s<>\[\]"]+/g, (url) =>
       url.length > MAX_URL_LENGTH ? `${new URL(url).origin}/…` : url,
-    )
+    ),
+  );
+}
+
+/** Texte de la partie HTML avec les liens complets (« texte [url] ») : pour lire les alertes d'offres. */
+export function htmlTextWithLinks(message: gmail_v1.Schema$Message): string {
+  return normalize(htmlToText(mailHtml(message)));
+}
+
+function normalize(text: string): string {
+  return text
     .replace(/\r\n?/g, "\n")
     .replace(/[​-‍͏﻿­]/g, "") // caractères invisibles des mails marketing
     .replace(/ /g, " ")

@@ -9,6 +9,7 @@
     "sync": "tsx src/sync-run.ts",
     "extract": "tsx src/extract-run.ts",
     "filter": "tsx src/filter-run.ts",
+    "offres:simuler": "tsx src/offers-simulate.ts",
     "eval:classify": "tsx src/classify-eval.ts",
     "reanalyse": "tsx src/reanalyse.ts",
     "candidatures": "tsx src/candidatures-run.ts",
