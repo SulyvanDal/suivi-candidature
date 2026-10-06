@@ -120,12 +120,17 @@ const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCas
 export const offerKey = (o: Pick<Offer, "title" | "company">) =>
   `${fold(o.title).replace(/\s+/g, " ").trim()}|${fold(o.company ?? "").replace(/\s+/g, " ").trim()}`;
 
-/** Mots ou expressions en mots entiers ; un « * » final accepte toutes les terminaisons. */
+/**
+ * Mots ou expressions en mots entiers ; un « * » en fin de mot accepte toutes les terminaisons
+ * (« coordinat* de projet* » : coordinateur, coordinatrice de projet, projets…).
+ */
 function wordsRegex(words: string[]): RegExp {
+  // Liste vide : rien ne correspond (sans ça, l'expression vide correspondrait à tout).
+  if (words.length === 0) return /(?!)/;
   const parts = words.map((w) =>
     fold(w)
       .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
-      .replace(/\*$/, "\\p{L}*")
+      .replace(/\*/g, "\\p{L}*")
       .replace(/ /g, "\\s+"),
   );
   return new RegExp(`(?<![\\p{L}\\p{N}])(${parts.join("|")})(?![\\p{L}\\p{N}])`, "u");

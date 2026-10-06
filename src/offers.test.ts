@@ -134,6 +134,11 @@ test("filtre des intitulés : exclusion dans l'intitulé ou le contrat, accents 
   assert.deepEqual(strict({ title: "Product Owner Sénior", contract: "CDI" }), { keep: false, rule: "exclu", match: "senior" });
   assert.deepEqual(strict({ title: "Chef de Projet", contract: "Intérim" }), { keep: false, rule: "exclu", match: "interim" });
   assert.equal(strict({ title: "Data Scientist", contract: "CDI" }).rule, "aucun-poste");
+  // « * » au milieu d'une expression.
+  const coord = titleFilter({ keep: ["coordinat* de projet*"], exclude: [] }, "garder-exclure");
+  assert.equal(coord({ title: "Coordinateur de projet F/H", contract: null }).keep, true);
+  assert.equal(coord({ title: "Coordinatrice de projets digitaux", contract: null }).keep, true);
+  assert.equal(coord({ title: "Coordinateur logistique", contract: null }).keep, false);
   // « stage » en mot entier seulement : « Stagecoach » n'est pas exclu.
   assert.equal(loose({ title: "Data Scientist Stagecoach", contract: "CDI" }).keep, true);
   assert.equal(loose({ title: "Stage Product Owner", contract: null }).keep, false);
