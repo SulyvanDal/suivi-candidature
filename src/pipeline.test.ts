@@ -76,3 +76,83 @@ test("mail écarté par le pré-filtre : pas envoyé à Claude, mais sa règle e
   assert.equal(row.filter_rule, "offre-fermee");
   assert.equal(row.event_type, null);
 });
+
+// Alerte d'offres fabriquée, au format HTML de Hellowork.
+function alertMessage(id: string, from: string, offers: [title: string, company: string, contract: string][]) {
+  const html = offers
+    .map(
+      ([title, company, contract], i) =>
+        `<p><a href="https://emails.hellowork.com/clic/${id}-${i}">${title}</a></p><p>${company}</p><p>Paris - 75</p>` +
+        `<p>${contract}</p><p><a href="https://emails.hellowork.com/clic/${id}-${i}-voir">Voir l’offre</a></p>`,
+    )
+    .join("");
+  return {
+    id,
+    labelIds: ["INBOX"],
+    internalDate: String(Date.UTC(2026, 9, 6)),
+    payload: {
+      mimeType: "text/html",
+      headers: [
+        { name: "From", value: from },
+        { name: "Subject", value: `Camille, ${offers.length} offres récentes proches de votre recherche` },
+      ],
+      body: { data: Buffer.from(`<html><body>${html}</body></html>`).toString("base64url") },
+    },
+  } satisfies gmail_v1.Schema$Message;
+}
+
+const HELLOWORK = "Hellowork Alert <alerte@emails.hellowork.com>";
+const offerRows = (db: ReturnType<typeof openDb>) =>
+  db.prepare("SELECT title, company, contract, title_keep, title_rule, gmail_id FROM offers ORDER BY id").all();
+
+test("alerte d'offres : pas envoyée à Claude, annonces enregistrées avec la décision du filtre sur l'intitulé", async () => {
+  const t = deps([
+    alertMessage("al1", HELLOWORK, [
+      ["Product Owner H/F", "Exemple", "CDI"],
+      ["Chef de Projet H/F", "Intérim Plus", "Intérim"],
+      ["Data Scientist H/F", "Autre", "CDI"],
+    ]),
+  ]);
+  const p = await processMessage("al1", t.deps);
+
+  assert.deepEqual(t.classified, []);
+  assert.deepEqual(p.offers, { found: 3, added: 3, kept: 1 });
+  assert.deepEqual(
+    offerRows(t.db).map((r) => ({ ...r })),
+    [
+      { title: "Product Owner H/F", company: "Exemple", contract: "CDI", title_keep: 1, title_rule: "poste-recherche", gmail_id: "al1" },
+      { title: "Chef de Projet H/F", company: "Intérim Plus", contract: "Intérim", title_keep: 0, title_rule: "exclu", gmail_id: "al1" },
+      { title: "Data Scientist H/F", company: "Autre", contract: "CDI", title_keep: 0, title_rule: "aucun-poste", gmail_id: "al1" },
+    ],
+  );
+});
+
+test("alerte d'offres : une annonce déjà vue (casse et accents ignorés) n'est pas enregistrée deux fois", async () => {
+  const t = deps([
+    alertMessage("al1", HELLOWORK, [["Product Owner H/F", "Société Exemple", "CDI"]]),
+    alertMessage("al2", HELLOWORK, [
+      ["PRODUCT OWNER H/F", "Societe exemple", "CDI"],
+      ["Développeur React H/F", "Exemple", "CDI"],
+    ]),
+  ]);
+  await processMessage("al1", t.deps);
+  const p = await processMessage("al2", t.deps);
+
+  assert.deepEqual(p.offers, { found: 2, added: 1, kept: 1 });
+  assert.deepEqual(
+    offerRows(t.db).map((r) => [r.title, r.gmail_id]),
+    [
+      ["Product Owner H/F", "al1"],
+      ["Développeur React H/F", "al2"],
+    ],
+  );
+});
+
+test("alerte d'une plateforme qu'on ne sait pas lire (Job Watch) : ignorée", async () => {
+  const t = deps([alertMessage("jw", "Job Watch <noreply@jobwatch.ch>", [["Product Owner", "Exemple", "CDI"]])]);
+  const p = await processMessage("jw", t.deps);
+
+  assert.equal(p.decision.rule, "alerte-offres");
+  assert.equal(p.offers, undefined);
+  assert.equal(offerRows(t.db).length, 0);
+});

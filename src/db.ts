@@ -6,6 +6,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { type Offer, offerKey, type TitleDecision, type TitleRules } from "./offers.js";
 
 export const DEFAULT_DB_PATH = "data/suivi.db";
 
@@ -93,6 +94,40 @@ const MIGRATIONS: string[] = [
   // 6 — Informations corrigées à la main, pour les signaler dans l'interface (#18)
   `
   ALTER TABLE candidatures ADD COLUMN manual TEXT NOT NULL DEFAULT '';  -- ex. "company,status"
+  `,
+  // 7 — Annonces extraites des alertes d'offres et filtre sur l'intitulé (#21)
+  `
+  CREATE TABLE offers (
+    id           INTEGER PRIMARY KEY,
+    dedupe_key   TEXT NOT NULL UNIQUE,  -- intitulé|entreprise sans casse ni accents : doublons ignorés
+    gmail_id     TEXT NOT NULL,         -- alerte d'origine
+    received_at  TEXT NOT NULL,
+    platform     TEXT NOT NULL,
+    title        TEXT NOT NULL,
+    company      TEXT,
+    location     TEXT,
+    contract     TEXT,
+    url          TEXT NOT NULL,
+    title_keep   INTEGER NOT NULL,      -- 1 = gardée par le filtre sur l'intitulé
+    title_rule   TEXT NOT NULL,         -- exclu | poste-recherche | aucun-poste
+    title_match  TEXT,
+    created_at   TEXT NOT NULL
+  );
+
+  -- Listes du filtre sur l'intitulé, modifiables depuis l'interface (#25).
+  CREATE TABLE offer_terms (
+    kind TEXT NOT NULL CHECK (kind IN ('poste', 'exclu')),
+    term TEXT NOT NULL,
+    PRIMARY KEY (kind, term)
+  );
+  INSERT INTO offer_terms (kind, term) VALUES
+    ('poste', 'product owner'), ('poste', 'proxy po'), ('poste', 'product manager'),
+    ('poste', 'product builder'), ('poste', 'ops & product'), ('poste', 'chef de projet*'),
+    ('poste', 'pmo'), ('poste', 'consultant digital transformation'), ('poste', 'business analyst'),
+    ('poste', 'amoa'), ('poste', 'développeu*'), ('poste', 'software engineer'),
+    ('poste', 'ingénieur logiciel'),
+    ('exclu', 'stage'), ('exclu', 'alternance'), ('exclu', 'freelance'), ('exclu', 'senior'),
+    ('exclu', 'tech lead'), ('exclu', 'intérim');
   `,
 ];
 
@@ -199,4 +234,45 @@ export function saveSyncState(db: DatabaseSync, historyId: string): void {
      ON CONFLICT (id) DO UPDATE SET history_id = excluded.history_id,
                                     last_sync_at = excluded.last_sync_at`,
   ).run(historyId, new Date().toISOString());
+}
+
+/** Listes du filtre sur l'intitulé (#21). */
+export function loadTitleRules(db: DatabaseSync): TitleRules {
+  const rows = db.prepare("SELECT kind, term FROM offer_terms ORDER BY term").all() as { kind: string; term: string }[];
+  return {
+    keep: rows.filter((r) => r.kind === "poste").map((r) => r.term),
+    exclude: rows.filter((r) => r.kind === "exclu").map((r) => r.term),
+  };
+}
+
+/** Enregistre une annonce ; renvoie false si c'est un doublon (déjà enregistrée, rien n'est modifié). */
+export function saveOffer(
+  db: DatabaseSync,
+  offer: Offer,
+  decision: TitleDecision,
+  alert: { gmailId: string; receivedAt: Date },
+): boolean {
+  const { changes } = db
+    .prepare(
+      `INSERT OR IGNORE INTO offers
+         (dedupe_key, gmail_id, received_at, platform, title, company, location, contract, url,
+          title_keep, title_rule, title_match, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      offerKey(offer),
+      alert.gmailId,
+      alert.receivedAt.toISOString(),
+      offer.platform,
+      offer.title,
+      offer.company,
+      offer.location,
+      offer.contract,
+      offer.url,
+      decision.keep ? 1 : 0,
+      decision.rule,
+      decision.match ?? null,
+      new Date().toISOString(),
+    );
+  return changes > 0;
 }

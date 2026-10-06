@@ -116,6 +116,10 @@ export interface TitleDecision {
 /** Minuscules, sans accents : « Développeur » et « Developpeur » se valent dans un intitulé. */
 const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
+/** Clé de doublon : même intitulé et même entreprise, sans casse, accents ni espaces superflus. */
+export const offerKey = (o: Pick<Offer, "title" | "company">) =>
+  `${fold(o.title).replace(/\s+/g, " ").trim()}|${fold(o.company ?? "").replace(/\s+/g, " ").trim()}`;
+
 /** Mots ou expressions en mots entiers ; un « * » final accepte toutes les terminaisons. */
 function wordsRegex(words: string[]): RegExp {
   const parts = words.map((w) =>

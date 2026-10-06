@@ -69,18 +69,25 @@ async function main(): Promise<number> {
     const cost = (tokens.input * PRICE_PER_MTOK.input + tokens.output * PRICE_PER_MTOK.output) / 1e6;
     const { candidatures } = rebuildCandidatures(db);
     const toCheck = candidatures.filter((c) => c.toCheck).length;
+    const offers = { added: 0, kept: 0 };
+    for (const p of processed) {
+      offers.added += p.offers?.added ?? 0;
+      offers.kept += p.offers?.kept ?? 0;
+    }
 
     if (auto) {
       // Journal : uniquement des comptes (ni objets, ni expéditeurs, ni secrets).
       console.log(
         `${stamp()} · synchronisation ${mode} · ${processed.length} mail(s), ${kept.length} envoyé(s) à Claude, ` +
-          `${relevant.length} lié(s) à une candidature · ${cost.toFixed(3)} $ · ${candidatures.length} candidature(s)` +
+          `${relevant.length} lié(s) à une candidature · ${cost.toFixed(3)} $ · ${candidatures.length} candidature(s) · ` +
+          `${offers.added} annonce(s), ${offers.kept} gardée(s)` +
           (budgetReached ? " · PLAFOND ATTEINT" : ""),
       );
     } else {
       console.log(`\nSynchronisation ${mode} : ${processed.length} nouveau(x) mail(s).`);
       console.log(`  Pré-filtre : ${kept.length} gardé(s), ${processed.length - kept.length} écarté(s).`);
       console.log(`  Claude : ${relevant.length} lié(s) à une candidature, ${kept.length - relevant.length} hors sujet.`);
+      console.log(`  Annonces des alertes : ${offers.added} nouvelle(s), ${offers.kept} gardée(s) par le filtre sur l'intitulé.`);
       console.log(`  Coût estimé : ${cost.toFixed(3)} $ (${tokens.input} jetons en entrée, ${tokens.output} en sortie).`);
       if (relevant.length > 0) console.log("\nMails liés à une candidature :");
       for (const { mail, result } of relevant) {

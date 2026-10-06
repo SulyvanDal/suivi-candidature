@@ -8,31 +8,17 @@
 import { gmail } from "@googleapis/gmail";
 import { convert } from "html-to-text";
 import { getAuthorizedClient } from "./auth.js";
+import { loadTitleRules, openDb } from "./db.js";
 import { extractMail, htmlTextWithLinks } from "./extract.js";
 import { filterMail } from "./filter.js";
-import { extractOffers, type Offer, platformOf, type TitleRules, titleFilter } from "./offers.js";
+import { extractOffers, type Offer, platformOf, titleFilter } from "./offers.js";
 import { withRetry } from "./retry.js";
 import { gmailSource } from "./sync.js";
 
-// Listes de l'utilisateur (06/10/2026, docs/fiche-offres.md). Elles seront modifiables depuis l'interface.
-const RULES: TitleRules = {
-  keep: [
-    "product owner",
-    "proxy po",
-    "product manager",
-    "product builder",
-    "ops & product",
-    "chef de projet*",
-    "pmo",
-    "consultant digital transformation",
-    "business analyst",
-    "amoa",
-    "développeu*",
-    "software engineer",
-    "ingénieur logiciel",
-  ],
-  exclude: ["stage", "alternance", "freelance", "senior", "tech lead", "intérim"],
-};
+// Listes du filtre sur l'intitulé : celles de la base (valeurs de départ dans la migration 7).
+const db = openDb();
+const RULES = loadTitleRules(db);
+db.close();
 
 // Estimation du coût du filtre 2 (Claude Haiku 4.5, en dollars par million de jetons).
 const PRICE_PER_MTOK = { input: 1, output: 5 };

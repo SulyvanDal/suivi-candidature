@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { getSyncState, isProcessed, markProcessed, openDb, saveSyncState } from "./db.js";
+import { getSyncState, isProcessed, loadTitleRules, markProcessed, openDb, saveSyncState } from "./db.js";
 
 // Chaque test travaille dans un dossier temporaire, supprimé à la fin.
 const tmp = mkdtempSync(join(tmpdir(), "suivi-db-"));
@@ -15,7 +15,16 @@ test("crée la base, son dossier et le schéma", () => {
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
     .all()
     .map((row) => row.name);
-  assert.deepEqual(tables, ["candidatures", "corrections", "mail_links", "mail_results", "processed_messages", "sync_state"]);
+  assert.deepEqual(tables, [
+    "candidatures",
+    "corrections",
+    "mail_links",
+    "mail_results",
+    "offer_terms",
+    "offers",
+    "processed_messages",
+    "sync_state",
+  ]);
   db.close();
 });
 
@@ -52,4 +61,12 @@ test("lit et met à jour l'état de synchronisation", () => {
   assert.equal(state?.historyId, "67890");
   assert.ok(state && !Number.isNaN(Date.parse(state.lastSyncAt)));
   db.close();
+});
+
+test("listes de départ du filtre sur l'intitulé (#21)", () => {
+  const rules = loadTitleRules(openDb(":memory:"));
+  assert.ok(rules.keep.includes("chef de projet*"));
+  assert.ok(rules.keep.includes("product owner"));
+  assert.ok(rules.exclude.includes("intérim"));
+  assert.equal(rules.keep.length + rules.exclude.length, 19);
 });

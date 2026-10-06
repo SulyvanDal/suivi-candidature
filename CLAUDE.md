@@ -37,6 +37,9 @@ lecture du corps des mails.
 - `npm run extract -- <id>` : affiche le texte extrait d'un mail.
 - `npm run filter -- --days 14` : simulation du pré-filtre (décision et règle par mail), sans
   rien écrire ni envoyer.
+- `npm run offres:simuler -- --days 14` : simulation de la veille des offres (#20) : annonces des
+  alertes, filtre sur l'intitulé, lecture des pages, coût estimé. Sans Claude ; ouvre les liens de
+  suivi des plateformes (comptés comme des clics).
 - `npm run eval:classify` : évalue la classification et l'extraction sur le jeu annoté
   (appelle Claude, ~0,18 $).
 - `npm run reanalyse` : repasse à Claude les mails déjà gardés par le pré-filtre et met la base
@@ -150,6 +153,14 @@ lecture du corps des mails.
   htmx servi depuis node_modules : aucune ressource chargée depuis Internet. Écritures protégées
   par le middleware CSRF de Hono (formulaires acceptés seulement depuis l'interface). Style validé par
   l'utilisateur : doux et chaleureux (beige, sauge, terracotta), polices Apple, liste aérée.
+- Veille des offres (fiche [docs/fiche-offres.md](docs/fiche-offres.md), milestone 8) : pendant la
+  synchronisation, les alertes `alerte-offres` d'une plateforme connue (`src/offers.ts` : Hellowork,
+  Indeed, Welcome to the Jungle, reconnues à l'expéditeur pour choisir l'extracteur ; Job Watch
+  ignoré) donnent des annonces, lues dans le HTML avec les liens complets (`htmlTextWithLinks`).
+  Table `offers` : doublons (intitulé + entreprise sans casse ni accents) jamais réenregistrés,
+  annonces écartées gardées (compteur, doublons). Filtre sur l'intitulé « garder + exclure » (mots
+  entiers, accents ignorés, `*` final), listes dans `offer_terms`. Suite : #22 description de la
+  page, #23 filtre par Claude (plafond 100/jour), #24 page « Offres à regarder », #25 édition des listes.
 - `data/suivi.db` contient les **vraies données** depuis le premier passage du 05/10/2026
   (1 419 mails, 246 envoyés à Claude, 94 liés à une candidature, 0,49 $).
 - L'URL d'autorisation est ouverte dans le navigateur (commande macOS `open`) ; elle n'est
@@ -175,4 +186,7 @@ Suivie dans les issues GitHub (`gh issue list`) :
    `npm run candidatures`), #12 exécution quotidienne (`launchd`), #13 interface : #16 consultation,
    #17 mails à classer, #18 édition
 7. Améliorations : #14 marquer les offres fermées (mails Hellowork « n'est plus disponible »),
-   #15 listes d'expéditeurs bloqués / toujours gardés, gérées depuis l'interface (en base, pas dans le code)
+   #15 listes d'expéditeurs bloqués / toujours gardés, gérées depuis l'interface (en base, pas dans le code),
+   #19 fusionner / détacher
+8. Veille des offres : #20 fiche (terminée), #21 extraction et stockage des annonces, #22 description
+   de la page, #23 filtre par Claude, #24 page « Offres à regarder », #25 édition des listes
