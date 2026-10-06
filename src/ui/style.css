@@ -72,6 +72,7 @@ h2 {
   font-weight: 600;
 }
 .sous-titre { margin: 6px 0 0; color: var(--discret); font-size: 1.05rem; }
+.mise-a-jour { margin: 4px 0 0; color: var(--discret); font-size: 0.85rem; }
 .retour { margin: 0 0 24px; font-size: 0.95rem; }
 .retour a { color: var(--discret); }
 

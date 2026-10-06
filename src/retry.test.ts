@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isRateLimited, withRetry } from "./retry.js";
+import { isOffline, isRateLimited, withRetry } from "./retry.js";
+
+test("reconnaît l'absence de réseau, y compris dans la cause, et seulement elle", () => {
+  // Message réel du 06/10/2026 au réveil du Mac.
+  const msg = "request to https://oauth2.googleapis.com/token failed, reason: getaddrinfo ENOTFOUND oauth2.googleapis.com";
+  assert.equal(isOffline(new Error(msg)), true);
+  assert.equal(isOffline(Object.assign(new Error("fetch failed"), { cause: { code: "ENETUNREACH" } })), true);
+  assert.equal(isOffline(Object.assign(new Error("Not Found"), { status: 404 })), false);
+  assert.equal(isOffline(new Error("invalid_grant")), false);
+});
 
 const rateLimitError = () =>
   Object.assign(new Error("Quota exceeded for quota metric 'Total Query Cost'"), { status: 403 });

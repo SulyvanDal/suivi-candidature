@@ -24,7 +24,9 @@ function date(d: Date): string {
     ...(sameYear ? {} : { year: "numeric" }),
   });
 }
-const longDate = (d: Date) => d.toLocaleDateString("fr-FR", { timeZone: TZ, day: "numeric", month: "long", year: "numeric" });
+/** « 08:43 » */
+const time = (d: Date) => d.toLocaleTimeString("fr-FR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+const longDate =(d: Date) => d.toLocaleDateString("fr-FR", { timeZone: TZ, day: "numeric", month: "long", year: "numeric" });
 
 const statusSlug = (s: DisplayStatus) =>
   s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, "-");
@@ -104,7 +106,12 @@ export function toClassifyPage(mails: MailToClassify[], candidatures: Candidatur
 }
 
 /** Page principale : filtres par statut et liste aérée ; bouton vers les mails à classer. */
-export function listPage(all: CandidatureRow[], filter: DisplayStatus | null, toClassifyCount = 0) {
+export function listPage(
+  all: CandidatureRow[],
+  filter: DisplayStatus | null,
+  toClassifyCount = 0,
+  lastSync: Date | null = null,
+) {
   const rows = filter ? all.filter((c) => c.status === filter) : all;
   const count = (s: DisplayStatus) => all.filter((c) => c.status === s).length;
   // Les filtres remplacent seulement #contenu (htmx), et fonctionnent aussi sans JavaScript.
@@ -128,6 +135,9 @@ export function listPage(all: CandidatureRow[], filter: DisplayStatus | null, to
         <div>
           <h1>Mes candidatures</h1>
           <p class="sous-titre">${all.length} candidatures depuis le 1<sup>er</sup> juin</p>
+          <p class="mise-a-jour">
+            ${lastSync ? `Mis à jour le ${date(lastSync)} à ${time(lastSync)}` : "Jamais synchronisé"}
+          </p>
         </div>
         <div class="entete-actions">
           <a class="bouton bouton-discret" href="/corrections">Corrections</a>

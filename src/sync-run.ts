@@ -4,7 +4,10 @@
 //   npm run sync           mode manuel : détail des mails, autorisation dans le navigateur si besoin
 //   npm run sync -- --auto mode automatique (#12, lancé par launchd) : jamais de navigateur,
 //                          plafond de mails envoyés à Claude, journal sans contenu de mail,
-//                          notification macOS en cas de problème uniquement
+//                          notification macOS en cas de problème uniquement (pas pour une absence
+//                          de réseau : launchd réessaie à l'heure suivante)
+//
+// Codes de sortie : 0 terminé, 1 erreur, 2 autorisation à renouveler, 3 plafond atteint, 4 pas de réseau.
 
 import { gmail } from "@googleapis/gmail";
 import { AuthorizationRequiredError, getAuthorizedClient } from "./auth.js";
@@ -14,7 +17,7 @@ import { classifyMail, createClient, MODEL } from "./classify.js";
 import { openDb } from "./db.js";
 import { notify } from "./notify.js";
 import { processMessage, type ProcessedMail } from "./pipeline.js";
-import { withRetry } from "./retry.js";
+import { isOffline, withRetry } from "./retry.js";
 import { gmailSource, syncNewMessages } from "./sync.js";
 
 // Coût de Claude Haiku 4.5, en dollars par million de jetons (entrée / sortie).
@@ -107,6 +110,11 @@ try {
     console.log(`${stamp()} · ${message} Lancer « npm run sync » pour réautoriser.`);
     if (auto) await notify(NOTIFY_TITLE, "Autorisation Gmail expirée : lance « npm run sync » pour réautoriser.");
     process.exitCode = 2;
+  } else if (isOffline(err)) {
+    // Pas de réseau (Mac qui se réveille, en déplacement) : pas de notification, le mode automatique
+    // réessaie à l'heure suivante.
+    console.log(`${stamp()} · Pas de réseau : ${message}`);
+    process.exitCode = 4;
   } else {
     console.log(`${stamp()} · Synchronisation échouée : ${message}`);
     if (auto) await notify(NOTIFY_TITLE, "Synchronisation échouée : voir le journal dans data/logs.");

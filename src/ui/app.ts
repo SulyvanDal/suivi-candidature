@@ -11,6 +11,7 @@ import {
   rebuildCandidatures,
   type Status,
 } from "../candidatures.js";
+import { getSyncState } from "../db.js";
 import {
   DISPLAY_STATUSES,
   type DisplayStatus,
@@ -37,7 +38,10 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date()):
   app.get("/", (c) => {
     const statut = c.req.query("statut");
     const filter = DISPLAY_STATUSES.includes(statut as DisplayStatus) ? (statut as DisplayStatus) : null;
-    return c.html(listPage(listCandidatures(db, now()), filter, listToClassify(db).length));
+    const lastSync = getSyncState(db)?.lastSyncAt;
+    return c.html(
+      listPage(listCandidatures(db, now()), filter, listToClassify(db).length, lastSync ? new Date(lastSync) : null),
+    );
   });
 
   app.get("/a-classer", (c) => c.html(toClassifyPage(listToClassify(db), listCandidatures(db, now()))));

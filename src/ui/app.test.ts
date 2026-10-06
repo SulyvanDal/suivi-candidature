@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { rebuildCandidatures } from "../candidatures.js";
-import { openDb, saveMailResult } from "../db.js";
+import { openDb, saveMailResult, saveSyncState } from "../db.js";
 import { createApp } from "./app.js";
 import { displayStatus } from "./queries.js";
 
@@ -52,6 +52,14 @@ test("« Sans réponse » : envoyée et rien depuis plus de 3 semaines", () => {
   assert.equal(displayStatus("Envoyée", new Date("2026-09-01"), NOW), "Sans réponse");
   assert.equal(displayStatus("Envoyée", new Date("2026-09-25"), NOW), "Envoyée");
   assert.equal(displayStatus("Refus", new Date("2026-07-01"), NOW), "Refus");
+});
+
+test("page principale : date de la dernière synchronisation", async () => {
+  const db = openDb(":memory:");
+  const app = createApp(db, () => NOW);
+  assert.match(await (await app.request("/")).text(), /Jamais synchronisé/);
+  saveSyncState(db, "123");
+  assert.match(await (await app.request("/")).text(), /Mis à jour le .+ à \d\d:\d\d/);
 });
 
 test("page principale : toutes les candidatures, la plus récente en premier, avec compteurs", async () => {

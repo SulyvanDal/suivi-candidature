@@ -23,6 +23,18 @@ export async function withRetry<T>(call: () => Promise<T>, attempts = MAX_ATTEMP
   }
 }
 
+// Erreurs de Node quand la machine n'a pas de réseau (au réveil, en déplacement…).
+const OFFLINE_CODES = ["ENOTFOUND", "EAI_AGAIN", "ENETUNREACH", "ENETDOWN", "EHOSTUNREACH", "ECONNREFUSED", "ETIMEDOUT"];
+
+/** Vrai si l'appel a échoué faute de réseau, et non à cause d'une réponse du serveur. */
+export function isOffline(err: unknown): boolean {
+  for (let e = err as { code?: unknown; cause?: unknown; message?: unknown } | undefined; e; e = e.cause as typeof e) {
+    if (OFFLINE_CODES.includes(String(e.code))) return true;
+    if (OFFLINE_CODES.some((code) => String(e!.message ?? "").includes(code))) return true;
+  }
+  return false;
+}
+
 export function isRateLimited(err: unknown): boolean {
   const status = httpStatus(err);
   if (status === 429) return true;

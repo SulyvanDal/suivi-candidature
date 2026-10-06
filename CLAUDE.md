@@ -134,10 +134,14 @@ lecture du corps des mails.
   `pas_candidature`, écrites depuis la page d'une candidature (#18). Annulation = suppression de
   la ligne, depuis la page « Corrections ». Fusion et retrait d'un mail : reportés (#19).
   Principe utilisateur : ne développer que ce qui sert maintenant, noter le reste en issue.
-- Synchronisation automatique (#12) : launchd tous les jours à 8 h → `scripts/sync-auto.sh` →
-  `sync-run.ts --auto` : jamais de navigateur (`AuthorizationRequiredError`), plafond
-  (`src/budget.ts`, le reste attend le lendemain grâce à la reprise de #5), journal sans contenu de
-  mail, notification macOS **uniquement en cas de problème** (autorisation expirée, plafond, erreur).
+- Synchronisation automatique (#12) : launchd **toutes les heures** → `scripts/sync-auto.sh 8` →
+  `sync-run.ts --auto`. Le script ne fait qu'une synchronisation par jour à partir de 8 h (marqueur
+  `data/logs/.terminee-<date>`) ; seule l'absence de réseau (code 4, `isOffline`, sans notification)
+  mène à un nouvel essai l'heure suivante (Mac au réveil, en vacances). Jamais de navigateur
+  (`AuthorizationRequiredError`), plafond par jour (`src/budget.ts`, le reste attend le lendemain
+  grâce à la reprise de #5), journal sans contenu de mail, notification macOS **uniquement en cas de
+  problème** (autorisation expirée, plafond, erreur). Node via le lien stable Homebrew `opt/node/bin`.
+  L'interface affiche la date de la dernière synchronisation complète (`sync_state.last_sync_at`).
 - Interface (`src/ui/`, #13 découpée en #16 consultation, #17 À classer, #18 édition) :
   **Hono + HTML généré côté serveur + htmx** (choix utilisateur ; migration vers React possible
   plus tard). `app.ts` (routes, testable via `app.request` sans serveur), `queries.ts` (lectures,

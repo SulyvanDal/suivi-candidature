@@ -4,8 +4,9 @@
 //   npm run auto:desinstaller   le désactive et le supprime
 //   npm run auto:statut         indique s'il est actif et affiche le dernier journal
 //
-// Si le Mac dort à l'heure prévue, macOS lance la tâche au réveil ; s'il est éteint, la journée est
-// sautée et la synchronisation suivante rattrape tout (elle est incrémentale).
+// launchd lance le script toutes les heures ; il ne synchronise qu'une fois par jour, à partir de
+// HOUR, et réessaie l'heure suivante s'il n'y a pas de réseau. Si le Mac dort ou est éteint, le
+// premier lancement qui passe rattrape tout (la synchronisation est incrémentale).
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -20,6 +21,9 @@ const PROJECT_DIR = resolve(dirname(new URL(import.meta.url).pathname), "..");
 const PLIST_PATH = join(homedir(), "Library", "LaunchAgents", `${LABEL}.plist`);
 const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+/** Intervalle entre deux lancements : le script ne synchronise qu'une fois par jour, après `hour`. */
+const INTERVAL_SECONDS = 3600;
+
 /** Contenu du fichier launchd. launchd n'a presque pas de PATH : on y ajoute le dossier de node. */
 export function buildPlist(projectDir: string, nodeDir: string, hour: number): string {
   const script = join(projectDir, "scripts", "sync-auto.sh");
@@ -33,6 +37,7 @@ export function buildPlist(projectDir: string, nodeDir: string, hour: number): s
   <array>
     <string>/bin/zsh</string>
     <string>${xml(script)}</string>
+    <string>${hour}</string>
   </array>
   <key>WorkingDirectory</key>
   <string>${xml(projectDir)}</string>
@@ -41,13 +46,8 @@ export function buildPlist(projectDir: string, nodeDir: string, hour: number): s
     <key>PATH</key>
     <string>${xml(nodeDir)}:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
-  <key>StartCalendarInterval</key>
-  <dict>
-    <key>Hour</key>
-    <integer>${hour}</integer>
-    <key>Minute</key>
-    <integer>0</integer>
-  </dict>
+  <key>StartInterval</key>
+  <integer>${INTERVAL_SECONDS}</integer>
   <key>StandardOutPath</key>
   <string>${xml(join(projectDir, "data", "logs", "launchd.log"))}</string>
   <key>StandardErrorPath</key>
@@ -87,7 +87,7 @@ function install(): void {
   if (!existsSync(join(nodeDir, "node"))) throw new Error(`node introuvable dans ${nodeDir}`);
   writeFileSync(PLIST_PATH, buildPlist(PROJECT_DIR, nodeDir, HOUR));
   execFileSync("launchctl", ["bootstrap", domain(), PLIST_PATH]);
-  console.log(`Synchronisation automatique installée : tous les jours à ${HOUR} h.`);
+  console.log(`Synchronisation automatique installée : une fois par jour, dès ${HOUR} h (essai toutes les heures).`);
   console.log(`Fichier : ${PLIST_PATH}`);
   console.log("Journaux : data/logs/ · Retrait : npm run auto:desinstaller");
 }
@@ -100,7 +100,7 @@ function uninstall(): void {
 
 function status(): void {
   const installed = existsSync(PLIST_PATH);
-  console.log(`Installée : ${installed ? "oui" : "non"} · Active : ${isLoaded() ? "oui" : "non"} · Heure : ${HOUR} h`);
+  console.log(`Installée : ${installed ? "oui" : "non"} · Active : ${isLoaded() ? "oui" : "non"} · À partir de ${HOUR} h, essai toutes les heures`);
   const logsDir = join(PROJECT_DIR, "data", "logs");
   const logs = existsSync(logsDir) ? readdirSync(logsDir).filter((f) => f.startsWith("sync-")).sort() : [];
   if (logs.length === 0) return console.log("Aucune synchronisation automatique pour l'instant.");
