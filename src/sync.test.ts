@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { getSyncState, isProcessed, openDb } from "./db.js";
-import { HistoryExpiredError, START_DATE, syncNewMessages, type MailSource } from "./sync.js";
+import { HistoryExpiredError, MessageGoneError, START_DATE, syncNewMessages, type MailSource } from "./sync.js";
 
 /** Faux Gmail : chaque test décrit ce que la boîte renvoie, et on note les appels. */
 function fakeSource(overrides: Partial<MailSource> = {}) {
@@ -111,4 +111,31 @@ test("plantage en cours de route : le passage suivant reprend sans rien perdre n
   const seen: string[] = [];
   await syncNewMessages(db, source, async (id) => void seen.push(id));
   assert.deepEqual(seen, ["b", "c"]);
+});
+
+test("mail supprimé de Gmail entre le listing et le téléchargement : ignoré, la synchro aboutit", async () => {
+  const db = openDb(":memory:");
+  const { source } = fakeSource({ listIdsSince: async () => ["a", "disparu", "b"] });
+
+  const result = await syncNewMessages(db, source, async (id) => {
+    if (id === "disparu") throw new MessageGoneError("introuvable");
+  });
+
+  assert.deepEqual(result.processed, ["a", "b"]);
+  assert.deepEqual(result.gone, ["disparu"]);
+  assert.ok(isProcessed(db, "disparu"), "pas retenté au passage suivant");
+  assert.equal(getSyncState(db)?.historyId, "h1");
+});
+
+test("autre erreur pendant le traitement : la synchro s'arrête toujours (rien n'est ignoré à tort)", async () => {
+  const db = openDb(":memory:");
+  const { source } = fakeSource({ listIdsSince: async () => ["a"] });
+
+  await assert.rejects(
+    syncNewMessages(db, source, async () => {
+      throw Object.assign(new Error("modèle introuvable"), { status: 404 });
+    }),
+  );
+  assert.equal(isProcessed(db, "a"), false);
+  assert.equal(getSyncState(db), null);
 });

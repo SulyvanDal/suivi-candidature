@@ -38,10 +38,15 @@ export interface MailSource {
 
 export class HistoryExpiredError extends Error {}
 
+/** Mail listé par Gmail mais introuvable au téléchargement (supprimé entre-temps). */
+export class MessageGoneError extends Error {}
+
 export interface SyncResult {
   mode: "initiale" | "incrementale" | "rattrapage";
   /** Mails traités pendant ce passage, du plus ancien au plus récent. */
   processed: string[];
+  /** Mails disparus de Gmail avant d'être lus : ignorés. */
+  gone: string[];
 }
 
 /**
@@ -85,13 +90,33 @@ export async function syncNewMessages(
   // Sans doublons, et sans les mails déjà traités.
   const toProcess = [...new Set(candidates)].filter((id) => !isProcessed(db, id));
 
+  const processed: string[] = [];
+  const gone: string[] = [];
   for (const id of toProcess) {
-    await onMessage(id);
+    try {
+      await onMessage(id);
+      processed.push(id);
+    } catch (err) {
+      // Mail supprimé depuis son arrivée : l'historique le liste toujours. On l'ignore, sinon
+      // chaque passage suivant retomberait dessus sans jamais aboutir.
+      if (!(err instanceof MessageGoneError)) throw err;
+      gone.push(id);
+    }
     markProcessed(db, id);
   }
 
   saveSyncState(db, nextHistoryId);
-  return { mode, processed: toProcess };
+  return { mode, processed, gone };
+}
+
+/** Télécharge un mail complet ; lève MessageGoneError s'il n'existe plus (404). */
+export async function fetchFullMessage(api: gmail_v1.Gmail, id: string): Promise<gmail_v1.Schema$Message> {
+  try {
+    return (await withRetry(() => api.users.messages.get({ userId: "me", id, format: "full" }))).data;
+  } catch (err) {
+    if (httpStatus(err) === 404) throw new MessageGoneError(`Mail ${id} introuvable.`);
+    throw err;
+  }
 }
 
 /** Implémentation réelle de MailSource avec l'API Gmail. */

@@ -17,8 +17,8 @@ import { classifyMail, createClient, MODEL } from "./classify.js";
 import { openDb } from "./db.js";
 import { notify } from "./notify.js";
 import { processMessage, type ProcessedMail } from "./pipeline.js";
-import { isOffline, withRetry } from "./retry.js";
-import { gmailSource, syncNewMessages } from "./sync.js";
+import { isOffline } from "./retry.js";
+import { fetchFullMessage, gmailSource, syncNewMessages } from "./sync.js";
 
 // Coût de Claude Haiku 4.5, en dollars par million de jetons (entrée / sortie).
 const PRICE_PER_MTOK = { input: 1, output: 5 };
@@ -38,16 +38,16 @@ async function main(): Promise<number> {
   const processed: ProcessedMail[] = [];
   const tokens = { input: 0, output: 0 };
   let mode = "interrompue";
+  let gone: string[] = [];
   let budgetReached = false;
 
   try {
     try {
-      ({ mode } = await syncNewMessages(db, gmailSource(api), async (id) => {
+      ({ mode, gone } = await syncNewMessages(db, gmailSource(api), async (id) => {
         const p = await processMessage(id, {
           db,
           model: MODEL,
-          fetchMessage: async (messageId) =>
-            (await withRetry(() => api.users.messages.get({ userId: "me", id: messageId, format: "full" }))).data,
+          fetchMessage: (messageId) => fetchFullMessage(api, messageId),
           classify: (mail) => budget.call(claude, mail),
         });
         processed.push(p);
@@ -81,10 +81,12 @@ async function main(): Promise<number> {
         `${stamp()} · synchronisation ${mode} · ${processed.length} mail(s), ${kept.length} envoyé(s) à Claude, ` +
           `${relevant.length} lié(s) à une candidature · ${cost.toFixed(3)} $ · ${candidatures.length} candidature(s) · ` +
           `${offers.added} annonce(s), ${offers.kept} gardée(s)` +
+          (gone.length ? ` · ${gone.length} mail(s) disparu(s) ignoré(s)` : "") +
           (budgetReached ? " · PLAFOND ATTEINT" : ""),
       );
     } else {
       console.log(`\nSynchronisation ${mode} : ${processed.length} nouveau(x) mail(s).`);
+      if (gone.length) console.log(`  ${gone.length} mail(s) supprimé(s) de Gmail entre-temps : ignoré(s).`);
       console.log(`  Pré-filtre : ${kept.length} gardé(s), ${processed.length - kept.length} écarté(s).`);
       console.log(`  Claude : ${relevant.length} lié(s) à une candidature, ${kept.length - relevant.length} hors sujet.`);
       console.log(`  Annonces des alertes : ${offers.added} nouvelle(s), ${offers.kept} gardée(s) par le filtre sur l'intitulé.`);
