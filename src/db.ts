@@ -169,10 +169,16 @@ const MIGRATIONS: string[] = [
   `,
 ];
 
+/** Attente maximale quand une autre connexion écrit (interface ouverte pendant la synchronisation). */
+const BUSY_TIMEOUT_MS = 5000;
+
 /** Ouvre la base (en la créant si besoin) et applique les migrations manquantes. */
 export function openDb(path: string = DEFAULT_DB_PATH): DatabaseSync {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
-  const db = new DatabaseSync(path);
+  // Sans délai, une écriture pendant que l'autre programme écrit échoue aussitôt (« database is locked »).
+  const db = new DatabaseSync(path, { timeout: BUSY_TIMEOUT_MS });
+  // WAL : la lecture ne bloque plus l'écriture, et inversement (une seule écriture à la fois).
+  if (path !== ":memory:") db.exec("PRAGMA journal_mode = WAL");
   migrate(db);
   return db;
 }

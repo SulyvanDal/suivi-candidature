@@ -40,6 +40,22 @@ test("rouvre une base existante sans erreur ni perte de données", () => {
   second.close();
 });
 
+test("deux programmes ouverts : on lit pendant que l'autre écrit (mode WAL)", () => {
+  const path = join(tmp, "partagee.db");
+  const sync = openDb(path);
+  const ui = openDb(path);
+  assert.equal((ui.prepare("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode, "wal");
+
+  sync.exec("BEGIN IMMEDIATE");
+  markProcessed(sync, "en-cours");
+  // Lecture pendant la transaction d'écriture : pas de « database is locked », état d'avant.
+  assert.equal(isProcessed(ui, "en-cours"), false);
+  sync.exec("COMMIT");
+  assert.equal(isProcessed(ui, "en-cours"), true);
+  sync.close();
+  ui.close();
+});
+
 test("mémorise les mails traités", () => {
   const db = openDb(":memory:");
   assert.equal(isProcessed(db, "m1"), false);
