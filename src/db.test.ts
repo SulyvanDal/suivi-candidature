@@ -60,19 +60,25 @@ test("deux programmes ouverts : on lit pendant que l'autre écrit (mode WAL)", (
 test("migration en attente : la base est sauvegardée avant, une base neuve ne l'est pas", () => {
   const dir = join(tmp, "sauvegarde");
   const path = join(dir, "suivi.db");
-  const db = openDb(path);
+  openDb(join(dir, "neuve.db")).close();
   assert.equal(existsSync(join(dir, "backups")), false);
-  markProcessed(db, "precieux");
-  // Base ramenée au schéma d'avant la migration 12.
-  db.exec("ALTER TABLE offers DROP COLUMN prioritized_at; PRAGMA user_version = 11");
-  db.close();
+
+  // Base restée au schéma de la migration 1 (livrée, donc figée), avec une donnée.
+  const old = new DatabaseSync(path);
+  old.exec(`
+    CREATE TABLE processed_messages (gmail_id TEXT PRIMARY KEY, processed_at TEXT NOT NULL);
+    CREATE TABLE sync_state (id INTEGER PRIMARY KEY CHECK (id = 1), history_id TEXT, last_sync_at TEXT);
+    INSERT INTO processed_messages VALUES ('precieux', '2026-06-01T00:00:00Z');
+    PRAGMA user_version = 1;
+  `);
+  old.close();
 
   openDb(path).close();
   const files = readdirSync(join(dir, "backups"));
   assert.equal(files.length, 1);
-  assert.match(files[0], /^suivi-.*-v11\.db$/);
+  assert.match(files[0], /^suivi-.*-v1\.db$/);
   const copy = new DatabaseSync(join(dir, "backups", files[0]));
-  assert.equal((copy.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 11);
+  assert.equal((copy.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 1);
   assert.ok(copy.prepare("SELECT 1 FROM processed_messages WHERE gmail_id = 'precieux'").get());
   copy.close();
 

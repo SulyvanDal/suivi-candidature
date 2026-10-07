@@ -105,6 +105,9 @@ lecture du corps des mails.
   traité qu'après succès, le historyId n'est enregistré qu'en fin de passage ; 404 sur
   `history.list` → rattrapage par date (dernière synchro − 1 jour). Spams, corbeille et
   brouillons exclus, mails envoyés gardés. Gmail est injecté (`MailSource`) pour les tests.
+  Mail impossible à traiter (extraction, refus ou réponse inexploitable de Claude) : `MailFailedError`,
+  enregistré avec `mail_results.error` et marqué traité, la synchronisation continue (`reanalyse` le
+  repasse) ; les erreurs passagères (réseau, Claude indisponible, plafond) arrêtent toujours le passage.
 - Extraction du texte (`src/extract.ts`, `html-to-text`) : `text/plain` préféré sauf s'il fait
   moins de 200 caractères ; HTML glissé dans `text/plain` par certains ATS converti ; URLs de plus
   de 100 caractères (liens de suivi) raccourcies à leur domaine ; `multipart/report` (mail non

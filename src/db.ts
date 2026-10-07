@@ -167,6 +167,10 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE offers ADD COLUMN prioritized_at TEXT;  -- NULL = pas prioritaire
   `,
+  // 13 — Mails en échec, enregistrés pour ne pas bloquer la synchronisation (#31)
+  `
+  ALTER TABLE mail_results ADD COLUMN error TEXT;  -- raison de l'échec ; NULL = traité normalement
+  `,
 ];
 
 /** Attente maximale quand une autre connexion écrit (interface ouverte pendant la synchronisation). */
@@ -253,14 +257,16 @@ export interface MailResult {
   location?: string | null;
   channel?: string | null;
   offerUrl?: string | null;
+  /** Échec du traitement de ce mail (#31) : il est enregistré quand même, sans classification. */
+  error?: string | null;
 }
 
 export function saveMailResult(db: DatabaseSync, r: MailResult): void {
   db.prepare(
     `INSERT OR REPLACE INTO mail_results
        (gmail_id, received_at, sent, filter_rule, filter_match, event_type, justification, model,
-        company, job_title, location, channel, offer_url, thread_id, subject, correspondent, processed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        company, job_title, location, channel, offer_url, thread_id, subject, correspondent, error, processed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     r.gmailId,
     r.receivedAt.toISOString(),
@@ -278,6 +284,7 @@ export function saveMailResult(db: DatabaseSync, r: MailResult): void {
     r.threadId ?? null,
     r.subject ?? null,
     r.correspondent ?? null,
+    r.error ?? null,
     new Date().toISOString(),
   );
 }

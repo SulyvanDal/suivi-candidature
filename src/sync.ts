@@ -41,12 +41,21 @@ export class HistoryExpiredError extends Error {}
 /** Mail listé par Gmail mais introuvable au téléchargement (supprimé entre-temps). */
 export class MessageGoneError extends Error {}
 
+/**
+ * Échec propre à un mail (extraction impossible, Claude n'a pas pu le classer) : le mail est
+ * enregistré avec l'erreur et la synchronisation continue. Les erreurs passagères (réseau,
+ * serveur, plafond) ne doivent pas prendre cette forme : elles arrêtent le passage.
+ */
+export class MailFailedError extends Error {}
+
 export interface SyncResult {
   mode: "initiale" | "incrementale" | "rattrapage";
   /** Mails traités pendant ce passage, du plus ancien au plus récent. */
   processed: string[];
   /** Mails disparus de Gmail avant d'être lus : ignorés. */
   gone: string[];
+  /** Mails en échec (MailFailedError) : enregistrés avec l'erreur, à repasser par « reanalyse ». */
+  failed: string[];
 }
 
 /**
@@ -92,21 +101,23 @@ export async function syncNewMessages(
 
   const processed: string[] = [];
   const gone: string[] = [];
+  const failed: string[] = [];
   for (const id of toProcess) {
     try {
       await onMessage(id);
       processed.push(id);
     } catch (err) {
-      // Mail supprimé depuis son arrivée : l'historique le liste toujours. On l'ignore, sinon
+      // Mail supprimé depuis son arrivée, ou impossible à traiter : on passe au suivant, sinon
       // chaque passage suivant retomberait dessus sans jamais aboutir.
-      if (!(err instanceof MessageGoneError)) throw err;
-      gone.push(id);
+      if (err instanceof MessageGoneError) gone.push(id);
+      else if (err instanceof MailFailedError) failed.push(id);
+      else throw err;
     }
     markProcessed(db, id);
   }
 
   saveSyncState(db, nextHistoryId);
-  return { mode, processed, gone };
+  return { mode, processed, gone, failed };
 }
 
 /** Télécharge un mail complet ; lève MessageGoneError s'il n'existe plus (404). */

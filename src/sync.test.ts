@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { getSyncState, isProcessed, openDb } from "./db.js";
-import { HistoryExpiredError, MessageGoneError, START_DATE, syncNewMessages, type MailSource } from "./sync.js";
+import { HistoryExpiredError, MailFailedError, MessageGoneError, START_DATE, syncNewMessages, type MailSource } from "./sync.js";
 
 /** Faux Gmail : chaque test décrit ce que la boîte renvoie, et on note les appels. */
 function fakeSource(overrides: Partial<MailSource> = {}) {
@@ -135,6 +135,37 @@ test("autre erreur pendant le traitement : la synchro s'arrête toujours (rien n
     syncNewMessages(db, source, async () => {
       throw Object.assign(new Error("modèle introuvable"), { status: 404 });
     }),
+  );
+  assert.equal(isProcessed(db, "a"), false);
+  assert.equal(getSyncState(db), null);
+});
+
+test("mail en échec : marqué traité, les suivants passent et le historyId est enregistré", async () => {
+  const db = openDb(":memory:");
+  const seen: string[] = [];
+  const { source } = fakeSource({ currentHistoryId: async () => "h9", listIdsSince: async () => ["a", "b", "c"] });
+
+  const result = await syncNewMessages(db, source, async (id) => {
+    if (id === "b") throw new MailFailedError("Claude n'a pas pu classer ce mail.");
+    seen.push(id);
+  });
+
+  assert.deepEqual(seen, ["a", "c"]);
+  assert.deepEqual(result.processed, ["a", "c"]);
+  assert.deepEqual(result.failed, ["b"]);
+  assert.ok(isProcessed(db, "b"));
+  assert.equal(getSyncState(db)?.historyId, "h9");
+});
+
+test("erreur passagère (réseau, Claude indisponible) : le passage s'arrête, rien n'est perdu", async () => {
+  const db = openDb(":memory:");
+  const { source } = fakeSource({ listIdsSince: async () => ["a", "b"] });
+
+  await assert.rejects(
+    syncNewMessages(db, source, async (id) => {
+      if (id === "a") throw new Error("529 overloaded");
+    }),
+    /overloaded/,
   );
   assert.equal(isProcessed(db, "a"), false);
   assert.equal(getSyncState(db), null);

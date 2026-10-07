@@ -44,7 +44,9 @@ export interface ClassificationResult {
   usage: { inputTokens: number; outputTokens: number };
 }
 
-export class ClassificationRefusedError extends Error {}
+/** Claude n'a pas pu classer ce mail (refus, réponse inexploitable) : propre au mail, pas passager. */
+export class ClassificationFailedError extends Error {}
+export class ClassificationRefusedError extends ClassificationFailedError {}
 
 const SYSTEM_PROMPT = `Tu aides une personne en recherche d'emploi à suivre ses candidatures à partir de ses mails.
 On te donne un mail (reçu par elle, ou envoyé par elle). Classe-le dans exactement un type :
@@ -108,7 +110,7 @@ export async function classifyMail(client: Anthropic, mail: ExtractedMail): Prom
     throw new ClassificationRefusedError(`Classification refusée pour le mail ${mail.id}.`);
   }
   if (!response.parsed_output) {
-    throw new Error(`Réponse inexploitable pour le mail ${mail.id} (${response.stop_reason}).`);
+    throw new ClassificationFailedError(`Réponse inexploitable pour le mail ${mail.id} (${response.stop_reason}).`);
   }
   return {
     classification: sanitize(response.parsed_output, text),

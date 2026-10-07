@@ -41,11 +41,12 @@ async function main(): Promise<number> {
   const tokens = { input: 0, output: 0 };
   let mode = "interrompue";
   let gone: string[] = [];
+  let failed: string[] = [];
   let budgetReached = false;
 
   try {
     try {
-      ({ mode, gone } = await syncNewMessages(db, gmailSource(api), async (id) => {
+      ({ mode, gone, failed } = await syncNewMessages(db, gmailSource(api), async (id) => {
         const p = await processMessage(id, {
           db,
           model: MODEL,
@@ -101,11 +102,16 @@ async function main(): Promise<number> {
             ? `tri : ${judged.kept} gardée(s), ${judged.rejected} écartée(s), ${judged.waiting} en attente`
             : "tri : profil absent") +
           (gone.length ? ` · ${gone.length} mail(s) disparu(s) ignoré(s)` : "") +
+          (failed.length ? ` · ${failed.length} mail(s) en échec` : "") +
           (budgetReached ? " · PLAFOND ATTEINT" : ""),
       );
     } else {
       console.log(`\nSynchronisation ${mode} : ${processed.length} nouveau(x) mail(s).`);
       if (gone.length) console.log(`  ${gone.length} mail(s) supprimé(s) de Gmail entre-temps : ignoré(s).`);
+      if (failed.length) {
+        console.log(`  ${failed.length} mail(s) en échec, enregistré(s) avec l'erreur (npm run reanalyse pour les repasser) :`);
+        for (const id of failed) console.log(`    ${id}`);
+      }
       console.log(`  Pré-filtre : ${kept.length} gardé(s), ${processed.length - kept.length} écarté(s).`);
       console.log(`  Claude : ${relevant.length} lié(s) à une candidature, ${kept.length - relevant.length} hors sujet.`);
       console.log(`  Annonces des alertes : ${offers.added} nouvelle(s), ${offers.kept} gardée(s) par le filtre sur l'intitulé.`);

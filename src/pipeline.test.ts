@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { gmail_v1 } from "@googleapis/gmail";
 import { openDb } from "./db.js";
+import { ClassificationRefusedError } from "./classify.js";
 import { processMessage } from "./pipeline.js";
+import { MailFailedError } from "./sync.js";
 
 // Mails fabriqués, faux Gmail et faux Claude.
 
@@ -155,4 +157,50 @@ test("alerte d'une plateforme qu'on ne sait pas lire (Job Watch) : ignorée", as
   assert.equal(p.decision.rule, "alerte-offres");
   assert.equal(p.offers, undefined);
   assert.equal(offerRows(t.db).length, 0);
+});
+
+test("Claude ne peut pas classer le mail : enregistré avec l'erreur, sans classification", async () => {
+  const t = deps([gmailMessage("a", "Entretien", "Je vous propose un entretien jeudi.")]);
+  t.deps.classify = async () => {
+    throw new ClassificationRefusedError("Classification refusée pour le mail a.");
+  };
+
+  await assert.rejects(processMessage("a", t.deps), MailFailedError);
+  const row = t.db.prepare("SELECT filter_rule, event_type, error FROM mail_results WHERE gmail_id = 'a'").get();
+  assert.deepEqual({ ...row }, { filter_rule: "mot-cle", event_type: null, error: "Classification refusée pour le mail a." });
+});
+
+test("Claude indisponible : l'erreur remonte telle quelle, rien n'est enregistré", async () => {
+  const t = deps([gmailMessage("a", "Entretien", "Je vous propose un entretien jeudi.")]);
+  t.deps.classify = async () => {
+    throw new Error("529 overloaded");
+  };
+
+  await assert.rejects(processMessage("a", t.deps), /overloaded/);
+  assert.equal(t.db.prepare("SELECT 1 FROM mail_results WHERE gmail_id = 'a'").get(), undefined);
+});
+
+test("mail illisible (date absente) : enregistré en « erreur », sans appel à Claude", async () => {
+  const message = gmailMessage("a", "Entretien", "Je vous propose un entretien jeudi.");
+  delete message.internalDate;
+  const t = deps([message]);
+
+  await assert.rejects(processMessage("a", t.deps), MailFailedError);
+  assert.deepEqual(t.classified, []);
+  const row = t.db.prepare("SELECT filter_rule, error FROM mail_results WHERE gmail_id = 'a'").get();
+  assert.deepEqual({ ...row }, { filter_rule: "erreur", error: "Extraction impossible : date du mail illisible" });
+});
+
+test("mail repassé avec succès : l'erreur précédente est effacée", async () => {
+  const t = deps([gmailMessage("a", "Entretien", "Je vous propose un entretien jeudi.")]);
+  const classify = t.deps.classify;
+  t.deps.classify = async () => {
+    throw new ClassificationRefusedError("refus");
+  };
+  await assert.rejects(processMessage("a", t.deps), MailFailedError);
+
+  t.deps.classify = classify;
+  await processMessage("a", t.deps);
+  const row = t.db.prepare("SELECT event_type, error FROM mail_results WHERE gmail_id = 'a'").get();
+  assert.deepEqual({ ...row }, { event_type: "entretien", error: null });
 });
