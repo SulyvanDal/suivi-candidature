@@ -100,6 +100,7 @@ lecture du corps des mails.
   module `src/db.ts`. Le schéma évolue par migrations versionnées avec `PRAGMA user_version` :
   ne jamais modifier une migration livrée, en ajouter une à la fin.
   Mode WAL et délai d'attente de 5 s : l'interface et la synchronisation peuvent tourner en même temps.
+  Avant d'appliquer des migrations à une base existante : copie dans `data/backups/` (5 gardées).
 - Synchronisation (`src/sync.ts`) : historyId lu avant le listing initial ; un mail n'est marqué
   traité qu'après succès, le historyId n'est enregistré qu'en fin de passage ; 404 sur
   `history.list` → rattrapage par date (dernière synchro − 1 jour). Spams, corbeille et

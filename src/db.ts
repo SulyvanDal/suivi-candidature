@@ -3,8 +3,8 @@
 // Le schéma évolue par migrations : la base garde son numéro de version dans
 // PRAGMA user_version, et au démarrage on applique les migrations manquantes, dans l'ordre.
 
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { mkdirSync, readdirSync, rmSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { type Offer, offerKey, type TitleDecision, type TitleRules } from "./offers.js";
 
@@ -179,14 +179,20 @@ export function openDb(path: string = DEFAULT_DB_PATH): DatabaseSync {
   const db = new DatabaseSync(path, { timeout: BUSY_TIMEOUT_MS });
   // WAL : la lecture ne bloque plus l'écriture, et inversement (une seule écriture à la fois).
   if (path !== ":memory:") db.exec("PRAGMA journal_mode = WAL");
-  migrate(db);
+  migrate(db, path);
   return db;
 }
 
-function migrate(db: DatabaseSync): void {
+/** Sauvegardes gardées avant migration (les plus récentes). */
+const KEPT_BACKUPS = 5;
+
+function migrate(db: DatabaseSync, path: string): void {
   const { user_version: current } = db.prepare("PRAGMA user_version").get() as {
     user_version: number;
   };
+  // Base existante avec des migrations en attente : copie de sécurité d'abord (vraies données,
+  // corrections manuelles impossibles à recalculer).
+  if (path !== ":memory:" && current > 0 && current < MIGRATIONS.length) backup(db, path, current);
 
   for (let version = current + 1; version <= MIGRATIONS.length; version++) {
     // Chaque migration et son numéro de version sont appliqués ensemble, ou pas du tout.
@@ -200,6 +206,23 @@ function migrate(db: DatabaseSync): void {
       throw err;
     }
   }
+}
+
+/** Copie cohérente de la base (VACUUM INTO, valable en WAL) dans backups/, à côté de la base. */
+function backup(db: DatabaseSync, path: string, version: number): void {
+  const dir = join(dirname(path), "backups");
+  mkdirSync(dir, { recursive: true });
+  const name = basename(path, ".db");
+  // Horodatage en tête : l'ordre alphabétique est l'ordre chronologique.
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const file = join(dir, `${name}-${stamp}-v${version}.db`);
+  db.prepare("VACUUM INTO ?").run(file);
+  console.log(`Base sauvegardée avant mise à jour du schéma : ${file}`);
+
+  const backups = readdirSync(dir)
+    .filter((f) => f.startsWith(`${name}-`) && f.endsWith(".db"))
+    .sort();
+  for (const old of backups.slice(0, -KEPT_BACKUPS)) rmSync(join(dir, old));
 }
 
 export function isProcessed(db: DatabaseSync, gmailId: string): boolean {

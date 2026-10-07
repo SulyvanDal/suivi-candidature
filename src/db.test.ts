@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { getSetting, getSyncState, isProcessed, loadTitleRules, markProcessed, openDb, PROFILE_KEY, saveSyncState, setSetting } from "./db.js";
 
@@ -54,6 +55,30 @@ test("deux programmes ouverts : on lit pendant que l'autre écrit (mode WAL)", (
   assert.equal(isProcessed(ui, "en-cours"), true);
   sync.close();
   ui.close();
+});
+
+test("migration en attente : la base est sauvegardée avant, une base neuve ne l'est pas", () => {
+  const dir = join(tmp, "sauvegarde");
+  const path = join(dir, "suivi.db");
+  const db = openDb(path);
+  assert.equal(existsSync(join(dir, "backups")), false);
+  markProcessed(db, "precieux");
+  // Base ramenée au schéma d'avant la migration 12.
+  db.exec("ALTER TABLE offers DROP COLUMN prioritized_at; PRAGMA user_version = 11");
+  db.close();
+
+  openDb(path).close();
+  const files = readdirSync(join(dir, "backups"));
+  assert.equal(files.length, 1);
+  assert.match(files[0], /^suivi-.*-v11\.db$/);
+  const copy = new DatabaseSync(join(dir, "backups", files[0]));
+  assert.equal((copy.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 11);
+  assert.ok(copy.prepare("SELECT 1 FROM processed_messages WHERE gmail_id = 'precieux'").get());
+  copy.close();
+
+  // Base à jour : pas de nouvelle sauvegarde.
+  openDb(path).close();
+  assert.equal(readdirSync(join(dir, "backups")).length, 1);
 });
 
 test("mémorise les mails traités", () => {
