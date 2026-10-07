@@ -138,7 +138,9 @@ lecture du corps des mails.
   `pas_candidature`, écrites depuis la page d'une candidature (#18). Annulation = suppression de
   la ligne, depuis la page « Corrections ». Fusion et retrait d'un mail : reportés (#19).
   Principe utilisateur : ne développer que ce qui sert maintenant, noter le reste en issue.
-- Synchronisation automatique (#12) : launchd **toutes les heures** → `scripts/sync-auto.sh 8` →
+- Synchronisation automatique (#12) : launchd **à 8 h** (`StartCalendarInterval`, lancé au réveil si
+  le Mac dormait) **et toutes les heures** (`StartInterval`, dont le décompte est suspendu pendant la
+  veille : seul, il partait jusqu'à une heure après le réveil) → `scripts/sync-auto.sh 8` →
   `sync-run.ts --auto`. Le script ne fait qu'une synchronisation par jour à partir de 8 h (marqueur
   `data/logs/.terminee-<date>`) ; seule l'absence de réseau (code 4, `isOffline`, sans notification)
   mène à un nouvel essai l'heure suivante (Mac au réveil, en vacances). Jamais de navigateur

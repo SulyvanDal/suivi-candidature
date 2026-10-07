@@ -4,9 +4,11 @@
 //   npm run auto:desinstaller   le désactive et le supprime
 //   npm run auto:statut         indique s'il est actif et affiche le dernier journal
 //
-// launchd lance le script toutes les heures ; il ne synchronise qu'une fois par jour, à partir de
-// HOUR, et réessaie l'heure suivante s'il n'y a pas de réseau. Si le Mac dort ou est éteint, le
-// premier lancement qui passe rattrape tout (la synchronisation est incrémentale).
+// launchd lance le script à HOUR pile, et aussi toutes les heures ; le script ne synchronise
+// qu'une fois par jour, à partir de HOUR, et réessaie l'heure suivante s'il n'y a pas de réseau.
+// Si le Mac dort à HOUR, macOS lance la tâche dès le réveil (le décompte horaire, lui, est suspendu
+// pendant la veille : seul, il ferait partir la synchronisation jusqu'à une heure après le réveil).
+// Si le Mac est éteint, le premier lancement qui passe rattrape tout (synchronisation incrémentale).
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -45,6 +47,13 @@ export function buildPlist(projectDir: string, nodeDir: string, hour: number): s
   <dict>
     <key>PATH</key>
     <string>${xml(nodeDir)}:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>${hour}</integer>
+    <key>Minute</key>
+    <integer>0</integer>
   </dict>
   <key>StartInterval</key>
   <integer>${INTERVAL_SECONDS}</integer>
@@ -87,7 +96,7 @@ function install(): void {
   if (!existsSync(join(nodeDir, "node"))) throw new Error(`node introuvable dans ${nodeDir}`);
   writeFileSync(PLIST_PATH, buildPlist(PROJECT_DIR, nodeDir, HOUR));
   execFileSync("launchctl", ["bootstrap", domain(), PLIST_PATH]);
-  console.log(`Synchronisation automatique installée : une fois par jour, dès ${HOUR} h (essai toutes les heures).`);
+  console.log(`Synchronisation automatique installée : une fois par jour, à ${HOUR} h ou au réveil (essai toutes les heures).`);
   console.log(`Fichier : ${PLIST_PATH}`);
   console.log("Journaux : data/logs/ · Retrait : npm run auto:desinstaller");
 }
@@ -100,7 +109,7 @@ function uninstall(): void {
 
 function status(): void {
   const installed = existsSync(PLIST_PATH);
-  console.log(`Installée : ${installed ? "oui" : "non"} · Active : ${isLoaded() ? "oui" : "non"} · À partir de ${HOUR} h, essai toutes les heures`);
+  console.log(`Installée : ${installed ? "oui" : "non"} · Active : ${isLoaded() ? "oui" : "non"} · À ${HOUR} h (ou au réveil), puis essai toutes les heures`);
   const logsDir = join(PROJECT_DIR, "data", "logs");
   const logs = existsSync(logsDir) ? readdirSync(logsDir).filter((f) => f.startsWith("sync-")).sort() : [];
   if (logs.length === 0) return console.log("Aucune synchronisation automatique pour l'instant.");

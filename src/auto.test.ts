@@ -28,9 +28,10 @@ test("notification : guillemets et antislashs échappés pour AppleScript", () =
   assert.equal(appleScriptString('lance « npm run sync » "vite" \\ fin'), '"lance « npm run sync » \\"vite\\" \\\\ fin"');
 });
 
-test("fichier launchd : valide pour macOS, lancé toutes les heures avec l'heure de début et le dossier de node", () => {
+test("fichier launchd : valide pour macOS, lancé à 8 h et toutes les heures, avec l'heure de début et le dossier de node", () => {
   const plist = buildPlist("/Users/moi/Projet & Co", "/opt/node/bin", 8);
   assert.match(plist, new RegExp(`<string>${LABEL}</string>`));
+  assert.match(plist, /<key>StartCalendarInterval<\/key>\s*<dict>\s*<key>Hour<\/key>\s*<integer>8<\/integer>/);
   assert.match(plist, /<key>StartInterval<\/key>\s*<integer>3600<\/integer>/);
   assert.match(plist, /sync-auto\.sh<\/string>\s*<string>8<\/string>/);
   assert.match(plist, /<string>\/opt\/node\/bin:\/usr\/bin/);
