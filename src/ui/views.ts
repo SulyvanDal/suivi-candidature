@@ -180,6 +180,9 @@ export function listPage(
   );
 }
 
+/** Retire la pastille « nouveau » de l'annonce dont on vient de cliquer « Consulter ». */
+const MARK_SEEN = "this.closest('li').querySelector('.pastille-nouveau')?.remove()";
+
 /** Offres à regarder (#24) : annonces des alertes gardées par les filtres. */
 export function offersPage(offers: OfferRow[], stats: OfferStats) {
   const rejected = stats.rejectedByTitle + stats.rejectedByClaude;
@@ -219,7 +222,16 @@ export function offersPage(offers: OfferRow[], stats: OfferStats) {
                 <div class="actions">
                   <!-- Nouvel onglet : la consultation est enregistrée, puis l'annonce s'ouvre. -->
                   <form method="post" action="/offres/${o.id}/consulter" target="_blank">
-                    <button type="submit" class="bouton bouton-principal">Consulter</button>
+                    <!-- L'annonce s'ouvre dans un autre onglet : la pastille « nouveau » est retirée ici
+                         tout de suite (clic, Ctrl-clic ou clic molette), sans attendre un rechargement. -->
+                    <button
+                      type="submit"
+                      class="bouton bouton-principal"
+                      hx-on:click="${MARK_SEEN}"
+                      hx-on:auxclick="${MARK_SEEN}"
+                    >
+                      Consulter
+                    </button>
                   </form>
                   <form method="post" action="/offres/${o.id}/ignorer" hx-boost="true">
                     <button type="submit" class="bouton bouton-discret">Ignorer</button>

@@ -254,7 +254,10 @@ test("offres : gardées par Claude et non vérifiées seulement, la plus récent
   assert.deepEqual(titles, ["Product Owner", "Chef de projet Indeed"]);
   assert.match(body, /Junior accepté\./);
   assert.match(body, /non vérifiée/);
-  assert.equal((body.match(/pastille-nouveau/g) ?? []).length, 2);
+  assert.equal((body.match(/class="pastille pastille-nouveau"/g) ?? []).length, 2);
+  // « Consulter » retire la pastille sur place (clic, Ctrl-clic, clic molette), sans rechargement.
+  assert.match(body, /hx-on:click="this\.closest\(&#39;li&#39;\)\.querySelector\(&#39;\.pastille-nouveau&#39;\)\?\.remove\(\)"/);
+  assert.match(body, /hx-on:auxclick=/);
   assert.match(body, /2 annonces écartées ces 7 derniers jours\s+\(1 par l'intitulé, 1 par Claude\) · 1 en cours de tri/);
 
   // Bouton de la page principale : nombre de nouvelles offres.
@@ -272,7 +275,7 @@ test("offres : « Consulter » marque l'annonce vue et ouvre l'adresse directe (
   assert.equal(res2.headers.get("location"), "https://suivi.example/Chef de projet Indeed");
 
   const body = await (await app.request("/offres")).text();
-  assert.doesNotMatch(body, /pastille-nouveau/);
+  assert.doesNotMatch(body, /class="pastille pastille-nouveau"/);
   assert.equal((await post(app, "/offres/9999/consulter")).status, 404);
 });
 
