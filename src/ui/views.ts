@@ -183,9 +183,61 @@ export function listPage(
 /** Retire la pastille « nouveau » de l'annonce dont on vient de cliquer « Consulter ». */
 const MARK_SEEN = "this.closest('li').querySelector('.pastille-nouveau')?.remove()";
 
-/** Offres à regarder (#24) : annonces des alertes gardées par les filtres. */
+/** Une annonce de « Offres à regarder ». */
+function offerLine(o: OfferRow) {
+  return html`<li class="offre${o.isNew ? " offre-nouvelle" : ""}">
+    <div class="ligne-principale">
+      <!-- Étoile (#27) : la liste est remplacée sur place, sans rechargement ni retour en haut. -->
+      <form
+        method="post"
+        action="/offres/${o.id}/prioritaire"
+        hx-post="/offres/${o.id}/prioritaire"
+        hx-target="#offres-liste"
+        hx-select="#offres-liste"
+        hx-swap="outerHTML"
+      >
+        <button
+          type="submit"
+          class="etoile${o.prioritized ? " etoile-active" : ""}"
+          aria-pressed="${o.prioritized ? "true" : "false"}"
+          title="${o.prioritized ? "Retirer des prioritaires" : "Marquer comme prioritaire"}"
+        >
+          ${o.prioritized ? "★" : "☆"}
+        </button>
+      </form>
+      <span class="entreprise">${o.title}</span>
+      ${o.isNew ? html`<span class="pastille pastille-nouveau">nouveau</span>` : ""}
+      ${o.unverified
+        ? html`<span class="pastille pastille-non-verifiee" title="Page illisible : non triée par Claude">non vérifiée</span>`
+        : ""}
+      <span class="mail-date">${date(o.receivedAt)}</span>
+    </div>
+    <div class="ligne-secondaire">
+      <span>${o.company ?? "Entreprise inconnue"}</span>
+      ${o.location ? html`<span>${o.location}</span>` : ""}
+      ${o.contract ? html`<span>${o.contract}</span>` : ""}
+    </div>
+    ${o.justification ? html`<p class="mail-justification">${o.justification}</p>` : ""}
+    <div class="actions">
+      <!-- L'annonce s'ouvre dans un autre onglet (consultation enregistrée au passage) : la pastille
+           « nouveau » est retirée ici tout de suite (clic, Ctrl-clic ou clic molette). -->
+      <form method="post" action="/offres/${o.id}/consulter" target="_blank">
+        <button type="submit" class="bouton bouton-principal" hx-on:click="${MARK_SEEN}" hx-on:auxclick="${MARK_SEEN}">
+          Consulter
+        </button>
+      </form>
+      <form method="post" action="/offres/${o.id}/ignorer" hx-boost="true">
+        <button type="submit" class="bouton bouton-discret">Ignorer</button>
+      </form>
+    </div>
+  </li>`;
+}
+
+/** Offres à regarder (#24) : annonces des alertes gardées par les filtres, prioritaires en tête (#27). */
 export function offersPage(offers: OfferRow[], stats: OfferStats) {
   const rejected = stats.rejectedByTitle + stats.rejectedByClaude;
+  const prioritized = offers.filter((o) => o.prioritized);
+  const others = offers.filter((o) => !o.prioritized);
   return layout(
     "Offres à regarder",
     html`<p class="retour"><a href="/">← Mes candidatures</a></p>
@@ -198,48 +250,22 @@ export function offersPage(offers: OfferRow[], stats: OfferStats) {
           <a class="bouton bouton-discret" href="/offres/reglages">Réglages</a>
         </div>
       </header>
-      ${offers.length === 0
-        ? html`<p class="vide">Aucune offre à regarder pour l'instant.</p>`
-        : html`<ul class="liste offres">
-            ${offers.map(
-              (o) => html`<li class="offre${o.isNew ? " offre-nouvelle" : ""}">
-                <div class="ligne-principale">
-                  <span class="entreprise">${o.title}</span>
-                  ${o.isNew ? html`<span class="pastille pastille-nouveau">nouveau</span>` : ""}
-                  ${o.unverified
-                    ? html`<span class="pastille pastille-non-verifiee" title="Page illisible : non triée par Claude"
-                        >non vérifiée</span
-                      >`
-                    : ""}
-                  <span class="mail-date">${date(o.receivedAt)}</span>
-                </div>
-                <div class="ligne-secondaire">
-                  <span>${o.company ?? "Entreprise inconnue"}</span>
-                  ${o.location ? html`<span>${o.location}</span>` : ""}
-                  ${o.contract ? html`<span>${o.contract}</span>` : ""}
-                </div>
-                ${o.justification ? html`<p class="mail-justification">${o.justification}</p>` : ""}
-                <div class="actions">
-                  <!-- Nouvel onglet : la consultation est enregistrée, puis l'annonce s'ouvre. -->
-                  <form method="post" action="/offres/${o.id}/consulter" target="_blank">
-                    <!-- L'annonce s'ouvre dans un autre onglet : la pastille « nouveau » est retirée ici
-                         tout de suite (clic, Ctrl-clic ou clic molette), sans attendre un rechargement. -->
-                    <button
-                      type="submit"
-                      class="bouton bouton-principal"
-                      hx-on:click="${MARK_SEEN}"
-                      hx-on:auxclick="${MARK_SEEN}"
-                    >
-                      Consulter
-                    </button>
-                  </form>
-                  <form method="post" action="/offres/${o.id}/ignorer" hx-boost="true">
-                    <button type="submit" class="bouton bouton-discret">Ignorer</button>
-                  </form>
-                </div>
-              </li>`,
-            )}
-          </ul>`}
+      <div id="offres-liste">
+        ${offers.length === 0
+          ? html`<p class="vide">Aucune offre à regarder pour l'instant.</p>`
+          : html`${prioritized.length
+                ? html`<h2 class="offres-section">Prioritaires</h2>
+                    <ul class="liste offres">
+                      ${prioritized.map(offerLine)}
+                    </ul>`
+                : ""}
+              ${others.length
+                ? html`${prioritized.length ? html`<h2 class="offres-section">Autres offres</h2>` : ""}
+                    <ul class="liste offres">
+                      ${others.map(offerLine)}
+                    </ul>`
+                : ""}`}
+      </div>
       <p class="offres-stats">
         ${rejected} annonce${rejected > 1 ? "s" : ""} écartée${rejected > 1 ? "s" : ""} ces 7 derniers jours
         (${stats.rejectedByTitle} par l'intitulé, ${stats.rejectedByClaude} par Claude)${stats.pending

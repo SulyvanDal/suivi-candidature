@@ -177,6 +177,8 @@ lecture du corps des mails.
   annonces gardées par Claude + non vérifiées, sans les ignorées ; « Consulter » (formulaire
   `target=_blank` → `seen_at`, redirection vers `page_url` sinon le lien de suivi, http(s) seulement),
   « Ignorer » (`ignored_at`) ; compteurs des écartées sur 7 jours et des annonces en cours de tri.
+  La pastille « nouveau » est retirée sur place au clic (`hx-on`). Étoile (#27, `prioritized_at`) :
+  prioritaires dans un bloc en tête, bascule sans rechargement (`hx-select="#offres-liste"`).
   Réglages (#25, `/offres/reglages`) : termes des deux listes (ajout, retrait), profil (vide refusé),
   plafonds (0 à 30 ans ; un changement recalcule aussitôt les décisions existantes à partir des faits
   enregistrés, `recomputeVerdicts`, sans rappeler Claude). Listes et profil : prochaines annonces seulement.

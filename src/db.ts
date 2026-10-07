@@ -163,6 +163,10 @@ const MIGRATIONS: string[] = [
   ALTER TABLE offers ADD COLUMN seen_at    TEXT;  -- consultée (retire la pastille « nouveau »)
   ALTER TABLE offers ADD COLUMN ignored_at TEXT;  -- ignorée : retirée de la liste
   `,
+  // 12 — Annonces marquées prioritaires à la main (#27)
+  `
+  ALTER TABLE offers ADD COLUMN prioritized_at TEXT;  -- NULL = pas prioritaire
+  `,
 ];
 
 /** Ouvre la base (en la créant si besoin) et applique les migrations manquantes. */
@@ -350,4 +354,13 @@ export function addOfferTerm(db: DatabaseSync, kind: TermKind, term: string): vo
 
 export function removeOfferTerm(db: DatabaseSync, kind: TermKind, term: string): void {
   db.prepare("DELETE FROM offer_terms WHERE kind = ? AND term = ?").run(kind, term);
+}
+
+/** Bascule le marquage « prioritaire » d'une annonce ; renvoie false si elle est inconnue. */
+export function toggleOfferPriority(db: DatabaseSync, id: number, now = new Date()): boolean {
+  return (
+    db
+      .prepare("UPDATE offers SET prioritized_at = CASE WHEN prioritized_at IS NULL THEN ? END WHERE id = ?")
+      .run(now.toISOString(), id).changes > 0
+  );
 }

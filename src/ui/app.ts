@@ -22,6 +22,7 @@ import {
   removeOfferTerm,
   setSetting,
   type TermKind,
+  toggleOfferPriority,
 } from "../db.js";
 import { CEILING_KEYS, loadCeilings, recomputeVerdicts } from "../offer-judge.js";
 import {
@@ -150,6 +151,11 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date()):
     // L'adresse vient d'un mail : on ne redirige que vers une page web.
     if (!/^https?:\/\//i.test(url)) return c.text("Adresse d'annonce invalide", 400);
     return c.redirect(url, 303);
+  });
+
+  app.post("/offres/:id/prioritaire", (c) => {
+    if (!toggleOfferPriority(db, Number(c.req.param("id")), now())) return c.text("Annonce inconnue", 404);
+    return c.redirect("/offres", 303);
   });
 
   app.post("/offres/:id/ignorer", (c) => {

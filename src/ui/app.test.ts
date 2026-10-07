@@ -345,3 +345,35 @@ test("réglages : formulaire venant d'un autre site refusé", async () => {
   assert.equal(res.status, 403);
   assert.equal(getSetting(db, PROFILE_KEY), null);
 });
+
+// --- Prioritaires (#27) --------------------------------------------------------------------------
+
+test("prioritaire : l'étoile fait passer l'annonce en tête ; un second clic la retire", async () => {
+  const { db, app } = offersSetup();
+  const id = (db.prepare("SELECT id FROM offers WHERE title = 'Chef de projet Indeed'").get() as { id: number }).id;
+  const titles = async () =>
+    [...(await (await app.request("/offres")).text()).matchAll(/<span class="entreprise">([^<]+)<\/span>/g)].map((m) => m[1]);
+
+  assert.deepEqual(await titles(), ["Product Owner", "Chef de projet Indeed"]);
+  const res = await post(app, `/offres/${id}/prioritaire`);
+  assert.equal(res.status, 303);
+  assert.deepEqual(await titles(), ["Chef de projet Indeed", "Product Owner"]);
+  const body = await (await app.request("/offres")).text();
+  assert.match(body, /<h2 class="offres-section">Prioritaires<\/h2>/);
+  assert.match(body, /aria-pressed="true"/);
+
+  await post(app, `/offres/${id}/prioritaire`);
+  assert.deepEqual(await titles(), ["Product Owner", "Chef de projet Indeed"]);
+  assert.doesNotMatch(await (await app.request("/offres")).text(), /Prioritaires/);
+  assert.equal((await post(app, "/offres/9999/prioritaire")).status, 404);
+});
+
+test("prioritaire : une annonce prioritaire ignorée disparaît ; formulaire d'un autre site refusé", async () => {
+  const { db, app } = offersSetup();
+  const id = (db.prepare("SELECT id FROM offers WHERE title = 'Product Owner'").get() as { id: number }).id;
+
+  assert.equal((await post(app, `/offres/${id}/prioritaire`, {}, "https://malveillant.example")).status, 403);
+  await post(app, `/offres/${id}/prioritaire`);
+  await post(app, `/offres/${id}/ignorer`);
+  assert.doesNotMatch(await (await app.request("/offres")).text(), />Product Owner</);
+});

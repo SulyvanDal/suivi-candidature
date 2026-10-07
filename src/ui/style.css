@@ -334,3 +334,19 @@ select { max-width: 280px; padding-right: 8px; }
   resize: vertical;
 }
 .formulaire textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Prioritaires (#27) */
+.offres-section { margin: 28px 0 12px; color: var(--discret); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.offres-section:first-child { margin-top: 0; }
+.ligne-principale form { margin: 0; }
+.etoile {
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--discret);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.etoile:hover { color: var(--accent); }
+.etoile-active { color: var(--accent); }
