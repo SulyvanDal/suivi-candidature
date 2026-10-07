@@ -261,7 +261,10 @@ test("offres : gardées par Claude et non vérifiées seulement, la plus récent
   assert.match(body, /2 annonces écartées ces 7 derniers jours\s+\(1 par l'intitulé, 1 par Claude\) · 1 en cours de tri/);
 
   // Bouton de la page principale : nombre de nouvelles offres.
-  assert.match(await (await app.request("/")).text(), /Offres <span class="compteur" title="nouvelles offres">2<\/span>/);
+  const home = await (await app.request("/")).text();
+  assert.match(home, /Offres <span class="compteur">2<\/span>/);
+  assert.match(home, /title="2 offres à regarder, dont 2 nouvelles"/);
+  assert.doesNotMatch(home, /bouton-offres sans-nouvelle/);
 });
 
 test("offres : « Consulter » marque l'annonce vue et ouvre l'adresse directe (sinon le lien de l'alerte)", async () => {
@@ -276,6 +279,10 @@ test("offres : « Consulter » marque l'annonce vue et ouvre l'adresse directe (
 
   const body = await (await app.request("/offres")).text();
   assert.doesNotMatch(body, /class="pastille pastille-nouveau"/);
+  // Tout est consulté : le bouton garde le nombre d'offres mais n'est plus mis en avant.
+  const home = await (await app.request("/")).text();
+  assert.match(home, /bouton-offres sans-nouvelle/);
+  assert.match(home, /Offres <span class="compteur">2<\/span>/);
   assert.equal((await post(app, "/offres/9999/consulter")).status, 404);
 });
 
@@ -285,6 +292,11 @@ test("offres : « Ignorer » retire l'annonce ; formulaire d'un autre site refus
 
   assert.equal((await post(app, `/offres/${id}/ignorer`, {}, "https://malveillant.example")).status, 403);
   assert.match(await (await app.request("/offres")).text(), /Product Owner/);
+
+  // Seule la liste est remplacée (pas de retour en haut de page, contrairement à hx-boost).
+  const page = await (await app.request("/offres")).text();
+  assert.match(page, new RegExp(`hx-post="/offres/${id}/ignorer"\\s+hx-target="#offres-liste"`));
+  assert.doesNotMatch(page, /hx-boost/);
 
   const res = await post(app, `/offres/${id}/ignorer`);
   assert.equal(res.status, 303);

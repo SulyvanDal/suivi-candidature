@@ -28,7 +28,7 @@ import { CEILING_KEYS, loadCeilings, recomputeVerdicts } from "../offer-judge.js
 import {
   DISPLAY_STATUSES,
   type DisplayStatus,
-  countNewOffers,
+  countOffers,
   getCandidature,
   listCandidatures,
   listCorrections,
@@ -69,7 +69,7 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date()):
         filter,
         listToClassify(db).length,
         lastSync ? new Date(lastSync) : null,
-        countNewOffers(db),
+        countOffers(db),
       ),
     );
   });

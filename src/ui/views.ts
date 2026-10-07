@@ -111,7 +111,7 @@ export function listPage(
   filter: DisplayStatus | null,
   toClassifyCount = 0,
   lastSync: Date | null = null,
-  newOffers = 0,
+  offers = { total: 0, new: 0 },
 ) {
   const rows = filter ? all.filter((c) => c.status === filter) : all;
   const count = (s: DisplayStatus) => all.filter((c) => c.status === s).length;
@@ -142,8 +142,12 @@ export function listPage(
         </div>
         <div class="entete-actions">
           <a class="bouton bouton-discret" href="/corrections">Corrections</a>
-          <a class="bouton bouton-offres${newOffers === 0 ? " sans-nouvelle" : ""}" href="/offres"
-            >Offres <span class="compteur" title="nouvelles offres">${newOffers}</span></a
+          <!-- Nombre d'offres à regarder ; le bouton est mis en avant tant qu'il y en a de nouvelles. -->
+          <a
+            class="bouton bouton-offres${offers.new === 0 ? " sans-nouvelle" : ""}"
+            href="/offres"
+            title="${offers.total} offre${offers.total > 1 ? "s" : ""} à regarder, dont ${offers.new} nouvelle${offers.new > 1 ? "s" : ""}"
+            >Offres <span class="compteur">${offers.total}</span></a
           >
           <a class="bouton bouton-a-classer${toClassifyCount === 0 ? " vide-a-classer" : ""}" href="/a-classer"
             >À classer <span class="compteur">${toClassifyCount}</span></a
@@ -226,7 +230,15 @@ function offerLine(o: OfferRow) {
           Consulter
         </button>
       </form>
-      <form method="post" action="/offres/${o.id}/ignorer" hx-boost="true">
+      <!-- Comme l'étoile : seule la liste est remplacée, la page reste à sa position. -->
+      <form
+        method="post"
+        action="/offres/${o.id}/ignorer"
+        hx-post="/offres/${o.id}/ignorer"
+        hx-target="#offres-liste"
+        hx-select="#offres-liste"
+        hx-swap="outerHTML"
+      >
         <button type="submit" class="bouton bouton-discret">Ignorer</button>
       </form>
     </div>

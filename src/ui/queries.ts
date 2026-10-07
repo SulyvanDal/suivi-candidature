@@ -252,8 +252,11 @@ export function listOffersToSee(db: DatabaseSync): OfferRow[] {
   }));
 }
 
-export function countNewOffers(db: DatabaseSync): number {
-  return (db.prepare(`SELECT count(*) AS n FROM offers WHERE ${TO_SEE} AND seen_at IS NULL`).get() as { n: number }).n;
+/** Annonces de la liste, et celles pas encore consultées (bouton de la page principale). */
+export function countOffers(db: DatabaseSync): { total: number; new: number } {
+  return db
+    .prepare(`SELECT count(*) AS total, count(*) FILTER (WHERE seen_at IS NULL) AS new FROM offers WHERE ${TO_SEE}`)
+    .get() as { total: number; new: number };
 }
 
 export interface OfferStats {
