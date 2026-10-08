@@ -28,6 +28,8 @@ pré-filtre et les annonces à trier sont envoyés à l'API Claude.
 - Lit la description sur la page de l'annonce (Indeed bloque la lecture : annonce « non vérifiée »).
 - Fait relever par Claude le type de poste, l'expérience minimale demandée, un éventuel profil
   senior ou une technologie de niche ; le code décide ensuite avec mes plafonds d'expérience.
+- Propose une priorité (1 ou 2) en comptant des points : poste orienté data / IA, stack proche,
+  type d'employeur, culture IA, Bordeaux, taille de l'entreprise, secteur.
 
 **Interface** (http://127.0.0.1:4321)
 - *Mes candidatures* : liste filtrable par statut, fiche de chaque candidature avec ses mails,
@@ -35,8 +37,9 @@ pré-filtre et les annonces à trier sont envoyés à l'API Claude.
   synchronisation.
 - *À classer* : mails liés à une démarche mais sans candidature reconnue (créer, rattacher, ignorer).
 - *Corrections* : historique des corrections manuelles, annulables.
-- *Offres à regarder* : annonces retenues avec la justification de Claude, pastilles « nouveau »
-  et « non vérifiée », étoile pour les marquer prioritaires, boutons Consulter et Ignorer.
+- *Offres à regarder* : annonces retenues avec la justification de Claude, pastilles « nouveau »,
+  « non vérifiée » et « prio » (détail des points au survol), étoile pour les marquer prioritaires à
+  la main (elles passent en tête), boutons Consulter et Ignorer.
 - *Réglages des offres* : postes recherchés, mots exclus, profil envoyé à Claude, plafonds
   d'expérience.
 
@@ -111,6 +114,8 @@ Journaux dans `data/logs/` : uniquement des comptes, jamais le contenu d'un mail
 | `npm run reanalyse` | Repasse à Claude les mails déjà retenus | ~0,55 $ |
 | `npm run eval:classify` | Évalue le classement des mails sur un jeu annoté (hors git) | ~0,18 $ |
 | `npm run eval:offres` | Évalue le tri des annonces sur un jeu annoté (hors git) | ~0,17 $ |
+| `npm run offres:retrier` | Donne une priorité aux annonces gardées qui n'en ont pas encore | ~0,20 $ |
+| `npm run eval:priorite` | Compare la priorité calculée aux annonces marquées d'une étoile | gratuit |
 | `npm test` / `npm run typecheck` | Tests automatiques / vérification des types | gratuit |
 
 ## Coûts

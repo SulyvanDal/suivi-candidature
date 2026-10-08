@@ -215,6 +215,9 @@ export interface OfferRow {
   isNew: boolean;
   /** Marquée prioritaire à la main (#27). */
   prioritized: boolean;
+  /** Priorité calculée (#26) : 1, 2, ou null si pas encore évaluée ; détail des points. */
+  priority: 1 | 2 | null;
+  priorityDetails: string | null;
 }
 
 /** Gardées par Claude, ou non vérifiées (gardées par l'intitulé, page illisible) ; sans les ignorées. */
@@ -223,8 +226,10 @@ const TO_SEE = `title_keep = 1 AND ignored_at IS NULL AND (verdict = 'garder' OR
 export function listOffersToSee(db: DatabaseSync): OfferRow[] {
   const rows = db
     .prepare(
-      `SELECT id, title, company, location, contract, received_at, justification, page_status, seen_at, prioritized_at
-       FROM offers WHERE ${TO_SEE} ORDER BY prioritized_at IS NULL, received_at DESC, id`,
+      `SELECT id, title, company, location, contract, received_at, justification, page_status, seen_at, prioritized_at,
+              priority, priority_points, priority_details
+       FROM offers WHERE ${TO_SEE}
+       ORDER BY prioritized_at IS NULL, coalesce(priority, 2), received_at DESC, id`,
     )
     .all() as {
     id: number;
@@ -237,6 +242,9 @@ export function listOffersToSee(db: DatabaseSync): OfferRow[] {
     page_status: string | null;
     seen_at: string | null;
     prioritized_at: string | null;
+    priority: number | null;
+    priority_points: number | null;
+    priority_details: string | null;
   }[];
   return rows.map((r) => ({
     id: r.id,
@@ -249,6 +257,8 @@ export function listOffersToSee(db: DatabaseSync): OfferRow[] {
     unverified: r.page_status === "non_verifiee",
     isNew: r.seen_at === null,
     prioritized: r.prioritized_at !== null,
+    priority: r.priority === 1 || r.priority === 2 ? r.priority : null,
+    priorityDetails: r.priority === null ? null : `${r.priority_points} point(s) : ${r.priority_details || "aucun critère"}`,
   }));
 }
 

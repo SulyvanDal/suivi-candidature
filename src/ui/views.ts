@@ -210,6 +210,9 @@ function offerLine(o: OfferRow) {
         </button>
       </form>
       <span class="entreprise">${o.title}</span>
+      ${o.priority === 1
+        ? html`<span class="pastille pastille-prio" title="Priorité proposée : ${o.priorityDetails}">prio</span>`
+        : ""}
       ${o.isNew ? html`<span class="pastille pastille-nouveau">nouveau</span>` : ""}
       ${o.unverified
         ? html`<span class="pastille pastille-non-verifiee" title="Page illisible : non triée par Claude">non vérifiée</span>`

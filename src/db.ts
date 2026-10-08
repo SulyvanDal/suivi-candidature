@@ -171,6 +171,22 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE mail_results ADD COLUMN error TEXT;  -- raison de l'échec ; NULL = traité normalement
   `,
+  // 14 — Priorité des annonces (#26) : faits relevés par Claude, points calculés par le code
+  `
+  ALTER TABLE offers ADD COLUMN employer_type    TEXT;     -- entreprise_finale | editeur_startup | esn_conseil | cabinet_recrutement | inconnu
+  ALTER TABLE offers ADD COLUMN ai_culture       INTEGER;
+  ALTER TABLE offers ADD COLUMN stack_match      INTEGER;
+  ALTER TABLE offers ADD COLUMN product_tech     INTEGER;
+  ALTER TABLE offers ADD COLUMN bank_insurance   INTEGER;
+  ALTER TABLE offers ADD COLUMN company_size     TEXT;     -- startup_scaleup | pme_eti | grand_groupe | inconnue
+  ALTER TABLE offers ADD COLUMN priority         INTEGER;  -- 1 | 2 ; NULL = faits de priorité pas encore relevés
+  ALTER TABLE offers ADD COLUMN priority_points  INTEGER;
+  ALTER TABLE offers ADD COLUMN priority_details TEXT;     -- « culture IA +1, Bordeaux +1 »
+  `,
+  // 15 — Poste orienté data / IA, critère fort de priorité (#26, barème revu le 08/10/2026)
+  `
+  ALTER TABLE offers ADD COLUMN data_ai_role INTEGER;
+  `,
 ];
 
 /** Attente maximale quand une autre connexion écrit (interface ouverte pendant la synchronisation). */

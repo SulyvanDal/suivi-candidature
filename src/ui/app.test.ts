@@ -389,3 +389,21 @@ test("prioritaire : une annonce prioritaire ignorée disparaît ; formulaire d'u
   await post(app, `/offres/${id}/ignorer`);
   assert.doesNotMatch(await (await app.request("/offres")).text(), />Product Owner</);
 });
+
+test("priorité calculée (#26) : priorité 1 après les étoiles, avec pastille et détail des points", async () => {
+  const { db, app } = offersSetup();
+  db.prepare(
+    "UPDATE offers SET priority = 1, priority_points = 4, priority_details = 'éditeur ou startup +2, culture IA +1, Bordeaux +1' WHERE title = 'Chef de projet Indeed'",
+  ).run();
+  const body = await (await app.request("/offres")).text();
+  const titles = [...body.matchAll(/<span class="entreprise">([^<]+)<\/span>/g)].map((m) => m[1]);
+  assert.deepEqual(titles, ["Chef de projet Indeed", "Product Owner"]);
+  assert.match(body, /title="Priorité proposée : 4 point\(s\) : éditeur ou startup \+2, culture IA \+1, Bordeaux \+1">prio</);
+  assert.equal((body.match(/pastille-prio/g) ?? []).length, 1);
+
+  // L'étoile manuelle passe toujours devant.
+  const id = (db.prepare("SELECT id FROM offers WHERE title = 'Product Owner'").get() as { id: number }).id;
+  await post(app, `/offres/${id}/prioritaire`);
+  const after = [...(await (await app.request("/offres")).text()).matchAll(/<span class="entreprise">([^<]+)<\/span>/g)].map((m) => m[1]);
+  assert.deepEqual(after, ["Product Owner", "Chef de projet Indeed"]);
+});

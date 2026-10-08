@@ -41,6 +41,9 @@ lecture du corps des mails.
   alertes, filtre sur l'intitulé, lecture des pages, coût estimé. Sans Claude ; ouvre les liens de
   suivi des plateformes (comptés comme des clics).
 - `npm run eval:offres` : évalue le tri des annonces sur le jeu annoté (appelle Claude, ~0,17 $).
+- `npm run offres:retrier` : repasse chez Claude les annonces gardées sans priorité (~0,20 $ pour 50).
+- `npm run eval:priorite` : compare la priorité calculée aux étoiles (`data/annotations-priorite.json`),
+  à partir des faits enregistrés : gratuit, permet d'ajuster le barème sans rappeler Claude.
 - `npm run eval:classify` : évalue la classification et l'extraction sur le jeu annoté
   (appelle Claude, ~0,18 $).
 - `npm run reanalyse` : repasse à Claude les mails déjà gardés par le pré-filtre et met la base
@@ -184,6 +187,13 @@ lecture du corps des mails.
   « Ignorer » (`ignored_at`) ; compteurs des écartées sur 7 jours et des annonces en cours de tri.
   La pastille « nouveau » est retirée sur place au clic (`hx-on`). Étoile (#27, `prioritized_at`) :
   prioritaires dans un bloc en tête, bascule sans rechargement (`hx-select="#offres-liste"`).
+  Priorité calculée (#26, `priorityOf`) : Claude relève employeur, culture IA, stack proche, produit +
+  tech, poste data / IA, banque / assurance, taille (même appel que le tri) ; le code compte les points
+  (poste data / IA +3, stack proche +2, junior, produit + tech, employeur final, IA, Bordeaux, taille
+  moyenne +1, banque / assurance hors startup −2 ; priorité 1 dès 4). Barème revu après évaluation
+  sur les étoiles de l'utilisateur (le type d'employeur comptait trop : 1/6, puis 5/6 avec 5 en trop
+  sur 50) ; à reprendre plus tard avec davantage d'étoiles. Ordre : étoiles, priorité 1, reste ;
+  pastille « prio » avec le détail des points au survol.
   Réglages (#25, `/offres/reglages`) : termes des deux listes (ajout, retrait), profil (vide refusé),
   plafonds (0 à 30 ans ; un changement recalcule aussitôt les décisions existantes à partir des faits
   enregistrés, `recomputeVerdicts`, sans rappeler Claude). Listes et profil : prochaines annonces seulement.

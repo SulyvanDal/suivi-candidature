@@ -350,3 +350,4 @@ select { max-width: 280px; padding-right: 8px; }
 }
 .etoile:hover { color: var(--accent); }
 .etoile-active { color: var(--accent); }
+.pastille-prio { background: var(--entretien-fond); color: var(--entretien); cursor: help; }
