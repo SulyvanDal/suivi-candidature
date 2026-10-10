@@ -2,13 +2,13 @@
 // Les annonces gardées sans priorité repassent chez Claude, y compris celles ignorées : leurs faits
 // servent à évaluer le barème (npm run eval:priorite, gratuit). Claude relève à nouveau tous les
 // faits : la décision garder / écarter peut donc changer.
+// Avec --toutes : toutes les annonces gardées, même déjà évaluées (après un changement de modèle).
 // Appelle Claude : quelques centimes.
 
-import { createClient, MODEL } from "./classify.js";
+import { createClient, MODEL, PRICE_PER_MTOK } from "./classify.js";
 import { getSetting, openDb, PROFILE_KEY } from "./db.js";
 import { decide, judgeOffer, loadCeilings, type OfferToJudge, priorityOf, saveJudgment } from "./offer-judge.js";
 
-const PRICE_PER_MTOK = { input: 1, output: 5 }; // Claude Haiku 4.5
 
 const db = openDb();
 const profile = getSetting(db, PROFILE_KEY);
@@ -16,10 +16,12 @@ if (!profile) throw new Error("Profil du candidat absent de la base.");
 const claude = createClient();
 const ceilings = loadCeilings(db);
 
+const all = process.argv.includes("--toutes");
 const offers = db
   .prepare(
     `SELECT id, title, company, location, contract, description FROM offers
-     WHERE page_status = 'lue' AND verdict = 'garder' AND (priority IS NULL OR data_ai_role IS NULL) ORDER BY id`,
+     WHERE page_status = 'lue' AND verdict = 'garder'
+       ${all ? "" : "AND (priority IS NULL OR data_ai_role IS NULL)"} ORDER BY id`,
   )
   .all() as unknown as ({ id: number } & OfferToJudge)[];
 

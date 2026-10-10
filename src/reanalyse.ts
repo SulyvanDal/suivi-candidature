@@ -4,12 +4,11 @@
 
 import { gmail } from "@googleapis/gmail";
 import { getAuthorizedClient } from "./auth.js";
-import { classifyMail, createClient, MODEL } from "./classify.js";
+import { classifyMail, createClient, MODEL, PRICE_PER_MTOK } from "./classify.js";
 import { openDb } from "./db.js";
 import { processMessage } from "./pipeline.js";
 import { withRetry } from "./retry.js";
 
-const PRICE_PER_MTOK = { input: 1, output: 5 }; // Claude Haiku 4.5
 
 const api = gmail({ version: "v1", auth: await getAuthorizedClient() });
 const claude = createClient();

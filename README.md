@@ -111,18 +111,19 @@ Journaux dans `data/logs/` : uniquement des comptes, jamais le contenu d'un mail
 | `npm run extract -- <id>` | Texte extrait d'un mail | gratuit |
 | `npm run filter -- --days 14` | Simulation du pré-filtre, sans rien écrire | gratuit |
 | `npm run offres:simuler -- --days 14` | Simulation de la veille des offres, sans rien écrire ni appeler Claude | gratuit |
-| `npm run reanalyse` | Repasse à Claude les mails déjà retenus | ~0,55 $ |
-| `npm run eval:classify` | Évalue le classement des mails sur un jeu annoté (hors git) | ~0,18 $ |
-| `npm run eval:offres` | Évalue le tri des annonces sur un jeu annoté (hors git) | ~0,17 $ |
-| `npm run offres:retrier` | Donne une priorité aux annonces gardées qui n'en ont pas encore | ~0,20 $ |
+| `npm run reanalyse` | Repasse à Claude les mails déjà retenus | ~0,06 $ |
+| `npm run eval:classify` | Évalue le classement des mails sur un jeu annoté (hors git) | ~0,02 $ |
+| `npm run eval:offres` | Évalue le tri des annonces sur un jeu annoté (hors git) | ~0,03 $ |
+| `npm run offres:retrier` | Donne une priorité aux annonces gardées qui n'en ont pas encore (`-- --toutes` : toutes) | ~0,04 $ |
 | `npm run eval:priorite` | Compare la priorité calculée aux annonces marquées d'une étoile | gratuit |
 | `npm test` / `npm run typecheck` | Tests automatiques / vérification des types | gratuit |
 
 ## Coûts
 
-Claude Haiku 4.5 (1 $ par million de jetons en entrée, 5 $ en sortie). Premier passage sur
-quatre mois de mails : environ 0,50 $. Ensuite, quelques centimes par jour : une poignée de mails
-et une quinzaine d'annonces à trier.
+Claude Haiku 5.5 (0,10 $ par million de jetons en entrée, 0,50 $ en sortie), réflexion désactivée.
+Une journée ordinaire (une vingtaine de mails, une trentaine d'annonces à trier) coûte environ
+2 centimes. Le premier passage sur quatre mois de mails avait coûté 0,50 $ avec Haiku 4.5, dix fois
+plus cher.
 
 ## Confidentialité
 

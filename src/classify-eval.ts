@@ -8,12 +8,11 @@
 import { readFileSync } from "node:fs";
 import { gmail } from "@googleapis/gmail";
 import { getAuthorizedClient } from "./auth.js";
-import { classifyMail, createClient, MODEL, type Classification } from "./classify.js";
+import { classifyMail, createClient, MODEL, PRICE_PER_MTOK, type Classification } from "./classify.js";
 import { extractMail } from "./extract.js";
 import { withRetry } from "./retry.js";
 
 const ANNOTATIONS_PATH = "data/annotations-classification.json";
-const PRICE_PER_MTOK = { input: 1, output: 5 }; // Claude Haiku 4.5
 const FIELDS = ["entreprise", "poste", "lieu", "canal"] as const;
 type Field = (typeof FIELDS)[number];
 

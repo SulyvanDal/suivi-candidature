@@ -7,6 +7,7 @@
 
 import { gmail } from "@googleapis/gmail";
 import { getAuthorizedClient } from "./auth.js";
+import { PRICE_PER_MTOK } from "./classify.js";
 import { loadTitleRules, openDb } from "./db.js";
 import { extractMail, htmlTextWithLinks } from "./extract.js";
 import { filterMail } from "./filter.js";
@@ -20,8 +21,7 @@ const db = openDb();
 const RULES = loadTitleRules(db);
 db.close();
 
-// Estimation du coût du filtre 2 (Claude Haiku 4.5, en dollars par million de jetons).
-const PRICE_PER_MTOK = { input: 1, output: 5 };
+// Estimation du coût du filtre 2 : tarif du modèle utilisé (PRICE_PER_MTOK).
 /** Consignes + profil du candidat, envoyés avec chaque annonce. */
 const PROMPT_TOKENS = 600;
 const OUTPUT_TOKENS = 120;

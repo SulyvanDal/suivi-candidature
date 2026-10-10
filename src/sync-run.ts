@@ -13,7 +13,7 @@ import { gmail } from "@googleapis/gmail";
 import { AuthorizationRequiredError, getAuthorizedClient } from "./auth.js";
 import { DailyBudgetReachedError, withBudget } from "./budget.js";
 import { rebuildCandidatures } from "./candidatures.js";
-import { classifyMail, createClient, MODEL } from "./classify.js";
+import { classifyMail, createClient, MODEL, PRICE_PER_MTOK } from "./classify.js";
 import { getSetting, openDb, PROFILE_KEY } from "./db.js";
 import { notify } from "./notify.js";
 import { DAILY_OFFER_LIMIT, judgeOffer, judgePendingOffers } from "./offer-judge.js";
@@ -22,8 +22,6 @@ import { processMessage, type ProcessedMail } from "./pipeline.js";
 import { isOffline } from "./retry.js";
 import { fetchFullMessage, gmailSource, syncNewMessages } from "./sync.js";
 
-// Coût de Claude Haiku 4.5, en dollars par million de jetons (entrée / sortie).
-const PRICE_PER_MTOK = { input: 1, output: 5 };
 /** Plafond quotidien en mode automatique (décision utilisateur : 50 mails, ~0,15 $ au plus). */
 const DAILY_CLAUDE_LIMIT = 50;
 

@@ -40,14 +40,15 @@ lecture du corps des mails.
 - `npm run offres:simuler -- --days 14` : simulation de la veille des offres (#20) : annonces des
   alertes, filtre sur l'intitulé, lecture des pages, coût estimé. Sans Claude ; ouvre les liens de
   suivi des plateformes (comptés comme des clics).
-- `npm run eval:offres` : évalue le tri des annonces sur le jeu annoté (appelle Claude, ~0,17 $).
-- `npm run offres:retrier` : repasse chez Claude les annonces gardées sans priorité (~0,20 $ pour 50).
+- `npm run eval:offres` : évalue le tri des annonces sur le jeu annoté (appelle Claude, ~0,03 $).
+- `npm run offres:retrier` : repasse chez Claude les annonces gardées sans priorité ; `-- --toutes`
+  pour toutes (après un changement de modèle) (~0,04 $ pour 70).
 - `npm run eval:priorite` : compare la priorité calculée aux étoiles (`data/annotations-priorite.json`),
   à partir des faits enregistrés : gratuit, permet d'ajuster le barème sans rappeler Claude.
 - `npm run eval:classify` : évalue la classification et l'extraction sur le jeu annoté
-  (appelle Claude, ~0,18 $).
+  (appelle Claude, ~0,02 $).
 - `npm run reanalyse` : repasse à Claude les mails déjà gardés par le pré-filtre et met la base
-  à jour (appelle Claude, ~0,55 $). **Toujours demander confirmation avant toute commande payante.**
+  à jour (appelle Claude, ~0,06 $). **Toujours demander confirmation avant toute commande payante.**
   Seule exception autorisée par l'utilisateur (05/10/2026) : la synchronisation automatique
   quotidienne (#12, `sync -- --auto`), plafonnée à 50 mails envoyés à Claude par jour.
 - `npm run auto:installer` / `auto:desinstaller` / `auto:statut` : synchronisation automatique
@@ -122,7 +123,10 @@ lecture du corps des mails.
   utilisateur) : objet et contenu uniquement. En cas de doute on garde, Claude triera.
 - Tous les appels Gmail passent par `withRetry` (`src/retry.ts`) : le quota « unités par minute
   par utilisateur » est vite atteint (constaté avec 10 téléchargements en parallèle).
-- Classification (`src/classify.ts`) : **Claude Haiku 4.5** (choix utilisateur, coût), sortie
+- Modèle : **Claude Haiku 5.5** (choix utilisateur : un Haiku, pour le coût), depuis le 10/10/2026
+  (Haiku 4.5 avant ; 10 fois moins cher, évaluations refaites au moins aussi bonnes), réflexion
+  désactivée. `MODEL`, `PRICE_PER_MTOK` et `THINKING` dans `src/classify.ts` : seul endroit à changer.
+- Classification (`src/classify.ts`) : sortie
   structurée zod, types `candidature_envoyee | entretien | offre | refus | autre | hors_sujet`.
   Citations retirées et texte plafonné à 8 000 caractères avant envoi. Clé dans
   `secrets/anthropic-api-key`. Résultats dans la table `mail_results` (règle du pré-filtre + type).
@@ -130,9 +134,10 @@ lecture du corps des mails.
   lien de l'offre ; null si absent, jamais deviné. Garde-fous dans `sanitize` : rien pour un mail
   hors sujet, lien gardé seulement s'il figure en entier dans le texte envoyé.
 - Évaluation : `npm run eval:classify` sur `data/annotations-classification.json` (hors git,
-  annoté avec l'utilisateur, 68 mails) : type 67/68, entreprise 35/36, poste 30/30, lieu 18/18,
-  canal 5/5. Erreurs restantes : approche LinkedIn d'une recruteuse classée `entretien`, Hays
-  (cabinet) sans entreprise.
+  annoté avec l'utilisateur, 68 mails) : Haiku 4.5 type 67/68, entreprise 35/36, poste 30/30, lieu
+  18/18, canal 5/5 ; Haiku 5.5 type 68/68, deux erreurs de champ (réponse à Niji sans entreprise ni
+  poste, lieu ajouté pour Acensi). Tri des annonces 50/53 avec les deux ; priorité 5/6 étoiles,
+  3 en trop sur 50 avec Haiku 5.5 (5 en trop avec 4.5).
   Ne pas sur-ajuster le prompt sur quelques mails : préférer une règle en aval (#10) ou #15.
 - Candidatures (`src/candidatures.ts`, #10) : **recalculées entièrement** à partir des événements
   à chaque sync (tables `candidatures` et `mail_links`), identifiant stable = gmail_id du premier

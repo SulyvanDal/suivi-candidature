@@ -6,12 +6,11 @@
 // Chaque lancement appelle réellement Claude : il coûte quelques centimes.
 
 import { readFileSync } from "node:fs";
-import { createClient } from "./classify.js";
+import { createClient, PRICE_PER_MTOK } from "./classify.js";
 import { getSetting, openDb, PROFILE_KEY } from "./db.js";
 import { decide, judgeOffer, loadCeilings, type OfferToJudge } from "./offer-judge.js";
 
 const ANNOTATIONS_PATH = "data/annotations-offres.json";
-const PRICE_PER_MTOK = { input: 1, output: 5 }; // Claude Haiku 4.5
 
 interface Annotation {
   id: number;

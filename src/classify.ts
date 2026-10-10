@@ -8,7 +8,18 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import type { ExtractedMail } from "./extract.js";
 
-export const MODEL = "claude-haiku-4-5";
+/**
+ * Modèle utilisé pour les mails et les annonces (choix utilisateur : un Haiku, pour le coût).
+ * Haiku 5.5 depuis le 10/10/2026 (10 fois moins cher que Haiku 4.5, évaluations refaites).
+ */
+export const MODEL = "claude-haiku-5-5";
+/** Tarif de MODEL, en dollars par million de jetons (prompts de moins de 100 000 jetons). */
+export const PRICE_PER_MTOK = { input: 0.1, output: 0.5 };
+/**
+ * Pas de réflexion : classement et extraction n'en ont pas besoin, et Haiku 5.5 l'active par
+ * défaut (jetons de réflexion facturés en sortie).
+ */
+export const THINKING = { type: "disabled" } as const;
 
 const API_KEY_PATH = "secrets/anthropic-api-key";
 
@@ -85,6 +96,7 @@ export async function classifyMail(client: Anthropic, mail: ExtractedMail): Prom
 
   const response = await client.messages.parse({
     model: MODEL,
+    thinking: THINKING,
     max_tokens: 1024,
     system: SYSTEM_PROMPT,
     messages: [
