@@ -54,6 +54,8 @@ lecture du corps des mails.
 - `npm run auto:installer` / `auto:desinstaller` / `auto:statut` : synchronisation automatique
   quotidienne via launchd (#12), lancée par l'utilisateur. Journaux : `data/logs/` (comptes uniquement).
 - `npm run ui` : interface web locale sur http://127.0.0.1:4321 (gratuit, lecture seule de la base).
+- `npm run config:initialiser` : écrit en base les mots-clés de départ de la configuration (affiche
+  les différences ; `-- --remplacer` pour écrire). Gratuit.
 - `npm run candidatures` : recalcule les candidatures et les affiche (gratuit, n'appelle pas Claude).
 - `npm test` : tests automatiques (`node:test`, fichiers `src/**/*.test.ts`).
 - `npm run typecheck` : vérification des types.
@@ -90,6 +92,18 @@ lecture du corps des mails.
 - Échanges en français.
 
 ## Choix techniques retenus
+
+- **Configuration par installation** (#36, milestone 10 : deuxième utilisatrice) : le code est commun,
+  ce qui décrit une recherche est dans `config/recherche.json` (hors git, le dépôt est public),
+  modèle versionné `config/exemple.json` (= configuration de Sulyvan, rien de personnel). Lu et
+  vérifié par `src/config.ts` (zod, message clair, `ConfigError` notifiée en mode automatique) :
+  date de début, 2 familles (clé enregistrée en base comme `job_type` et `plafond_<clé>`, nom,
+  définition pour Claude, plafond de départ), exemples hors cible, règles des mails propres à la
+  personne, mots-clés de départ. Consignes de Claude construites à partir de la configuration ;
+  avec le modèle versionné, identiques au caractère près à celles d'avant (`src/testdata/`, test).
+  Les tests ne lisent jamais `config/recherche.json` : la configuration est passée explicitement.
+  Profil, mots-clés et plafonds : en base, modifiables dans l'interface. Critères de priorité
+  encore dans le code jusqu'à #37.
 
 - Client OAuth de type **Application de bureau** ; redirection vers `http://127.0.0.1:<port libre>`.
 - Flux implémenté directement avec `google-auth-library` (pas `@google-cloud/local-auth`,

@@ -77,11 +77,38 @@ Déposer la clé seule dans `secrets/anthropic-api-key`, puis `chmod 600 secrets
 Le dossier `secrets/` est exclu de git ; il contiendra aussi `token.json`, créé à la première
 autorisation. Aucun secret n'est jamais affiché dans le terminal.
 
-### 3. Première autorisation et premier passage
+### 3. Configuration de la recherche
+
+Chaque installation décrit sa recherche dans `config/recherche.json` (exclu de git : le dépôt est
+public). Partir du modèle versionné, qui contient la configuration d'origine :
+
+```sh
+cp config/exemple.json config/recherche.json
+```
+
+| Champ | Contenu |
+|---|---|
+| `debutRecherche` | Début de la recherche (`AAAA-MM-JJ`) : le premier passage lit les mails depuis cette date |
+| `familles` | Les 2 familles de postes : `cle` (ne plus la changer ensuite), `nom`, `definition` (pour Claude), `plafondAns` (expérience maximale demandée, valeur de départ) |
+| `horsCible` | Exemples de postes hors cible malgré un intitulé proche |
+| `mails` | Règles de classement propres : `demarches` autres qu'une candidature, phrases ajoutées à « autre », cas ajoutés à « hors sujet » |
+| `motsClesDeDepart` | Postes recherchés et mots exclus de départ |
+
+Le fichier est vérifié à chaque lancement : une erreur s'affiche avec l'endroit en cause. Les
+mots-clés de départ s'écrivent ensuite en base, puis se modifient dans l'interface :
+
+```sh
+npm run config:initialiser               # affiche les différences avec la base
+npm run config:initialiser -- --remplacer  # écrit ceux de la configuration
+```
+
+Le profil envoyé à Claude se saisit dans l'interface (*Offres → Réglages*), jamais dans un fichier.
+
+### 4. Première autorisation et premier passage
 
 ```sh
 npm run list   # ouvre le navigateur pour autoriser la lecture de Gmail, puis liste les mails des 24 h
-npm run sync   # premier passage depuis le 1er juin 2026 (payant, voir Coûts)
+npm run sync   # premier passage depuis debutRecherche (payant, voir Coûts)
 npm run ui     # interface sur http://127.0.0.1:4321
 ```
 
@@ -89,7 +116,7 @@ npm run ui     # interface sur http://127.0.0.1:4321
 Accéder à … (non sécurisé)*, puis accepter la lecture des mails. C'est normal pour une
 application personnelle non soumise à validation.
 
-### 4. Synchronisation quotidienne
+### 5. Synchronisation quotidienne
 
 ```sh
 npm run auto:installer    # installe l'agent launchd (8 h ou au réveil, essai toutes les heures)
@@ -106,6 +133,7 @@ Journaux dans `data/logs/` : uniquement des comptes, jamais le contenu d'un mail
 |---|---|---|
 | `npm run sync` | Synchronisation : mails, annonces, pages, tri ; affiche le bilan et le coût | payant |
 | `npm run ui` | Interface web locale (127.0.0.1 uniquement) | gratuit |
+| `npm run config:initialiser` | Écrit en base les mots-clés de départ de la configuration (`-- --remplacer`) | gratuit |
 | `npm run candidatures` | Recalcule les candidatures et les affiche dans le terminal | gratuit |
 | `npm run list` | Mails des dernières 24 h (lance l'autorisation si nécessaire) | gratuit |
 | `npm run extract -- <id>` | Texte extrait d'un mail | gratuit |

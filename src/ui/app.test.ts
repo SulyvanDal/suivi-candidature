@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { rebuildCandidatures } from "../candidatures.js";
 import { getSetting, loadTitleRules, openDb, PROFILE_KEY, saveMailResult, saveOffer, saveSyncState } from "../db.js";
+import { loadConfig } from "../config.js";
 import { loadCeilings } from "../offer-judge.js";
 import { createApp } from "./app.js";
 import { displayStatus } from "./queries.js";
 
 // Données fabriquées, base en mémoire ; les pages sont testées sans démarrer de serveur.
+// Configuration : le modèle versionné (config/exemple.json).
+const CONFIG = loadConfig("config/exemple.json");
 
 const NOW = new Date("2026-10-05T12:00:00Z");
 
@@ -35,7 +38,7 @@ function setup() {
   // Échange sans candidature correspondante → à classer.
   mail("x1", "09-20", "autre", { company: "Immersion SA", jobTitle: null, subject: "Demande d'immersion" });
   rebuildCandidatures(db);
-  return createApp(db, () => NOW);
+  return createApp(db, () => NOW, CONFIG);
 }
 
 /** Partie « liste des candidatures » de la page (sans la section « À classer » et ses menus). */
@@ -57,7 +60,7 @@ test("« Sans réponse » : envoyée et rien depuis plus de 3 semaines", () => {
 
 test("page principale : date de la dernière synchronisation", async () => {
   const db = openDb(":memory:");
-  const app = createApp(db, () => NOW);
+  const app = createApp(db, () => NOW, CONFIG);
   assert.match(await (await app.request("/")).text(), /Jamais synchronisé/);
   saveSyncState(db, "123");
   assert.match(await (await app.request("/")).text(), /Mis à jour le .+ à \d\d:\d\d/);
@@ -243,7 +246,7 @@ function offersSetup() {
   add("Stage PO", { title_keep: 0 });
   add("PMO", { page_status: "lue" }); // pas encore jugée
   add("Business Analyst", { page_status: "lue", verdict: "garder", ignored_at: "2026-10-05T10:00:00Z" });
-  return { db, app: createApp(db, () => NOW) };
+  return { db, app: createApp(db, () => NOW, CONFIG) };
 }
 
 test("offres : gardées par Claude et non vérifiées seulement, la plus récente en premier, compteurs", async () => {
@@ -341,14 +344,14 @@ test("réglages : plafond modifié → décisions déjà prises recalculées san
   db.prepare("UPDATE offers SET job_type = 'produit_projet', experience_min = 5, senior = 0, niche_tech = 0 WHERE title = 'PO Senior'").run();
   assert.doesNotMatch(await (await app.request("/offres")).text(), />PO Senior</);
 
-  await post(app, "/offres/reglages/plafonds", { produit_projet: "5", developpeur: "2,5" });
-  assert.deepEqual(loadCeilings(db), { produitProjet: 5, developpeur: 2.5 });
+  await post(app, "/offres/reglages/plafonds", { plafond_produit_projet: "5", plafond_developpeur: "2,5" });
+  assert.deepEqual(loadCeilings(db, CONFIG.familles), { produit_projet: 5, developpeur: 2.5 });
   assert.match(await (await app.request("/offres")).text(), />PO Senior</);
 
-  const refused = await post(app, "/offres/reglages/plafonds", { produit_projet: "-1", developpeur: "2" });
+  const refused = await post(app, "/offres/reglages/plafonds", { plafond_produit_projet: "-1", plafond_developpeur: "2" });
   assert.equal(refused.headers.get("location"), "/offres/reglages?message=plafond");
-  assert.equal((await post(app, "/offres/reglages/plafonds", { produit_projet: "", developpeur: "2" })).headers.get("location"), "/offres/reglages?message=plafond");
-  assert.deepEqual(loadCeilings(db), { produitProjet: 5, developpeur: 2.5 });
+  assert.equal((await post(app, "/offres/reglages/plafonds", { plafond_produit_projet: "", plafond_developpeur: "2" })).headers.get("location"), "/offres/reglages?message=plafond");
+  assert.deepEqual(loadCeilings(db, CONFIG.familles), { produit_projet: 5, developpeur: 2.5 });
 });
 
 test("réglages : formulaire venant d'un autre site refusé", async () => {

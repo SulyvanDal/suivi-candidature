@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { loadConfig } from "./config.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { classifyMail, ClassificationRefusedError, MODEL, prepareText, sanitize } from "./classify.js";
 import type { ExtractedMail } from "./extract.js";
+
+/** Règles de classement du modèle de configuration versionné. */
+const RULES = loadConfig("config/exemple.json").mails;
 
 // Faux client Claude : aucun appel payant pendant les tests. Mails fabriqués uniquement.
 
@@ -47,7 +51,7 @@ const okResponse = {
 
 test("envoie le mail à Haiku avec une sortie structurée, renvoie la classification", async () => {
   const { client, calls } = fakeClient(okResponse);
-  const result = await classifyMail(client, mail({ sent: true }));
+  const result = await classifyMail(client, mail({ sent: true }), RULES);
 
   assert.equal(result.classification.type, "refus");
   assert.equal(result.classification.entreprise, "Exemple SA");
@@ -62,12 +66,12 @@ test("envoie le mail à Haiku avec une sortie structurée, renvoie la classifica
 
 test("refus de Claude : erreur dédiée", async () => {
   const { client } = fakeClient({ ...okResponse, stop_reason: "refusal", parsed_output: null });
-  await assert.rejects(classifyMail(client, mail()), ClassificationRefusedError);
+  await assert.rejects(classifyMail(client, mail(), RULES), ClassificationRefusedError);
 });
 
 test("réponse inexploitable : erreur", async () => {
   const { client } = fakeClient({ ...okResponse, stop_reason: "max_tokens", parsed_output: null });
-  await assert.rejects(classifyMail(client, mail()), /inexploitable/);
+  await assert.rejects(classifyMail(client, mail(), RULES), /inexploitable/);
 });
 
 test("citations retirées : « a écrit » (sur deux lignes), lignes en >", () => {

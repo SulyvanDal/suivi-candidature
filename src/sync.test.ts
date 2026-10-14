@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { getSyncState, isProcessed, openDb } from "./db.js";
-import { HistoryExpiredError, MailFailedError, MessageGoneError, START_DATE, syncNewMessages, type MailSource } from "./sync.js";
+import { HistoryExpiredError, MailFailedError, MessageGoneError, syncNewMessages, type MailSource } from "./sync.js";
+
+/** Début de la recherche des tests (dans l'application : la configuration). */
+const START_DATE = new Date("2026-06-01T00:00:00+02:00");
+const sync = (...args: [Parameters<typeof syncNewMessages>[0], MailSource, (id: string) => Promise<void>]) =>
+  syncNewMessages(...args, START_DATE);
 
 /** Faux Gmail : chaque test décrit ce que la boîte renvoie, et on note les appels. */
 function fakeSource(overrides: Partial<MailSource> = {}) {
@@ -28,7 +33,7 @@ test("premier passage : liste depuis le 1er juin et mémorise le historyId", asy
     listIdsSince: async () => ["a", "b"],
   });
 
-  const result = await syncNewMessages(db, source, noop);
+  const result = await sync(db, source, noop);
 
   assert.equal(result.mode, "initiale");
   assert.deepEqual(result.processed, ["a", "b"]);
@@ -39,10 +44,10 @@ test("premier passage : liste depuis le 1er juin et mémorise le historyId", asy
 
 test("second lancement sans nouveau mail : rien n'est retraité", async () => {
   const db = openDb(":memory:");
-  await syncNewMessages(db, fakeSource({ listIdsSince: async () => ["a"] }).source, noop);
+  await sync(db, fakeSource({ listIdsSince: async () => ["a"] }).source, noop);
 
   const { source, calls } = fakeSource();
-  const result = await syncNewMessages(db, source, noop);
+  const result = await sync(db, source, noop);
 
   assert.equal(result.mode, "incrementale");
   assert.deepEqual(result.processed, []);
@@ -51,7 +56,7 @@ test("second lancement sans nouveau mail : rien n'est retraité", async () => {
 
 test("passage incrémental : nouveaux mails, sans spam, corbeille, brouillons ni doublons", async () => {
   const db = openDb(":memory:");
-  await syncNewMessages(db, fakeSource({ listIdsSince: async () => ["a"] }).source, noop);
+  await sync(db, fakeSource({ listIdsSince: async () => ["a"] }).source, noop);
 
   const { source } = fakeSource({
     listAddedSince: async () => ({
@@ -68,7 +73,7 @@ test("passage incrémental : nouveaux mails, sans spam, corbeille, brouillons ni
     }),
   });
   const seen: string[] = [];
-  const result = await syncNewMessages(db, source, async (id) => void seen.push(id));
+  const result = await sync(db, source, async (id) => void seen.push(id));
 
   assert.deepEqual(result.processed, ["c", "g"]);
   assert.deepEqual(seen, ["c", "g"]);
@@ -77,7 +82,7 @@ test("passage incrémental : nouveaux mails, sans spam, corbeille, brouillons ni
 
 test("historyId trop ancien : rattrapage par date depuis la dernière synchro moins un jour", async () => {
   const db = openDb(":memory:");
-  await syncNewMessages(db, fakeSource({ listIdsSince: async () => ["a"] }).source, noop);
+  await sync(db, fakeSource({ listIdsSince: async () => ["a"] }).source, noop);
   const lastSyncAt = Date.parse(getSyncState(db)!.lastSyncAt);
 
   const { source, calls } = fakeSource({
@@ -87,7 +92,7 @@ test("historyId trop ancien : rattrapage par date depuis la dernière synchro mo
     },
     listIdsSince: async () => ["a", "z"],
   });
-  const result = await syncNewMessages(db, source, noop);
+  const result = await sync(db, source, noop);
 
   assert.equal(result.mode, "rattrapage");
   assert.deepEqual(result.processed, ["z"]);
@@ -100,7 +105,7 @@ test("plantage en cours de route : le passage suivant reprend sans rien perdre n
   const { source } = fakeSource({ listIdsSince: async () => ["a", "b", "c"] });
 
   await assert.rejects(
-    syncNewMessages(db, source, async (id) => {
+    sync(db, source, async (id) => {
       if (id === "b") throw new Error("panne");
     }),
   );
@@ -109,7 +114,7 @@ test("plantage en cours de route : le passage suivant reprend sans rien perdre n
   assert.equal(getSyncState(db), null); // historyId pas enregistré
 
   const seen: string[] = [];
-  await syncNewMessages(db, source, async (id) => void seen.push(id));
+  await sync(db, source, async (id) => void seen.push(id));
   assert.deepEqual(seen, ["b", "c"]);
 });
 
@@ -117,7 +122,7 @@ test("mail supprimé de Gmail entre le listing et le téléchargement : ignoré,
   const db = openDb(":memory:");
   const { source } = fakeSource({ listIdsSince: async () => ["a", "disparu", "b"] });
 
-  const result = await syncNewMessages(db, source, async (id) => {
+  const result = await sync(db, source, async (id) => {
     if (id === "disparu") throw new MessageGoneError("introuvable");
   });
 
@@ -132,7 +137,7 @@ test("autre erreur pendant le traitement : la synchro s'arrête toujours (rien n
   const { source } = fakeSource({ listIdsSince: async () => ["a"] });
 
   await assert.rejects(
-    syncNewMessages(db, source, async () => {
+    sync(db, source, async () => {
       throw Object.assign(new Error("modèle introuvable"), { status: 404 });
     }),
   );
@@ -145,7 +150,7 @@ test("mail en échec : marqué traité, les suivants passent et le historyId est
   const seen: string[] = [];
   const { source } = fakeSource({ currentHistoryId: async () => "h9", listIdsSince: async () => ["a", "b", "c"] });
 
-  const result = await syncNewMessages(db, source, async (id) => {
+  const result = await sync(db, source, async (id) => {
     if (id === "b") throw new MailFailedError("Claude n'a pas pu classer ce mail.");
     seen.push(id);
   });
@@ -162,7 +167,7 @@ test("erreur passagère (réseau, Claude indisponible) : le passage s'arrête, r
   const { source } = fakeSource({ listIdsSince: async () => ["a", "b"] });
 
   await assert.rejects(
-    syncNewMessages(db, source, async (id) => {
+    sync(db, source, async (id) => {
       if (id === "a") throw new Error("529 overloaded");
     }),
     /overloaded/,

@@ -1,0 +1,57 @@
+{
+  "debutRecherche": "2026-06-01",
+  "familles": [
+    {
+      "cle": "produit_projet",
+      "nom": "Produit / projet",
+      "plafondAns": 4,
+      "definition": "Product Owner, Product Manager, Product Builder, Ops & Product, chef de projet ou coordinateur de projet dans le numérique ou l'informatique, business analyst, AMOA, PMO"
+    },
+    {
+      "cle": "developpeur",
+      "nom": "Développeur",
+      "plafondAns": 2,
+      "definition": "développeur, ingénieur logiciel, software engineer"
+    }
+  ],
+  "horsCible": "chef de projet BTP, commercial, marketing, fleet manager, QA, data scientist…",
+  "mails": {
+    "demarches": [
+      "demande d'immersion"
+    ],
+    "autre": [
+      "Les échanges autour d'une demande d'immersion professionnelle dans une entreprise en font partie."
+    ],
+    "horsSujet": [
+      "prospection pour des programmes de stage ou de formation (y compris la réponse de la personne qui les décline)",
+      "candidatures et admissions à une formation ou une école (y compris en alternance)",
+      "approches spontanées d'un recruteur ou d'un cabinet pour un poste auquel la personne n'a pas postulé"
+    ]
+  },
+  "motsClesDeDepart": {
+    "postes": [
+      "product owner",
+      "proxy po",
+      "product manager",
+      "product builder",
+      "ops & product",
+      "chef de projet*",
+      "coordinat* de projet*",
+      "pmo",
+      "consultant digital transformation",
+      "business analyst",
+      "amoa",
+      "développeu*",
+      "software engineer",
+      "ingénieur logiciel"
+    ],
+    "exclus": [
+      "stage",
+      "alternance",
+      "freelance",
+      "senior",
+      "tech lead",
+      "intérim"
+    ]
+  }
+}

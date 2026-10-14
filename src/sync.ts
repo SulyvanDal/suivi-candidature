@@ -2,7 +2,7 @@
 //
 // Gmail numérote chaque changement de la boîte (historyId, croissant). On mémorise le
 // dernier numéro vu, et au passage suivant on demande à Gmail ce qui a été ajouté depuis.
-// - Premier passage : listing par date depuis START_DATE.
+// - Premier passage : listing par date depuis le début de la recherche (configuration, #36).
 // - Passages suivants : users.history.list depuis le historyId mémorisé.
 // - historyId trop ancien (404) : retour au listing par date, depuis la dernière synchro.
 
@@ -10,9 +10,6 @@ import type { DatabaseSync } from "node:sqlite";
 import type { gmail_v1 } from "@googleapis/gmail";
 import { getSyncState, isProcessed, markProcessed, saveSyncState } from "./db.js";
 import { httpStatus, withRetry } from "./retry.js";
-
-/** Début de la recherche d'emploi (fiche fonctionnelle) : minuit, heure de Paris. */
-export const START_DATE = new Date("2026-06-01T00:00:00+02:00");
 
 /** Marge de recouvrement lors d'un retour au listing par date. */
 const FALLBACK_MARGIN_MS = 24 * 60 * 60 * 1000;
@@ -67,6 +64,8 @@ export async function syncNewMessages(
   db: DatabaseSync,
   source: MailSource,
   onMessage: (id: string) => Promise<void>,
+  /** Début de la recherche (premier passage uniquement). */
+  startDate: Date,
 ): Promise<SyncResult> {
   const state = getSyncState(db);
   let mode: SyncResult["mode"];
@@ -78,7 +77,7 @@ export async function syncNewMessages(
     // le listing sera rattrapé au passage suivant.
     mode = "initiale";
     nextHistoryId = await source.currentHistoryId();
-    candidates = await source.listIdsSince(START_DATE);
+    candidates = await source.listIdsSince(startDate);
   } else {
     try {
       mode = "incrementale";

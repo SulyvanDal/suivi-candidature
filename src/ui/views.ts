@@ -26,7 +26,13 @@ function date(d: Date): string {
 }
 /** « 08:43 » */
 const time = (d: Date) => d.toLocaleTimeString("fr-FR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
-const longDate =(d: Date) => d.toLocaleDateString("fr-FR", { timeZone: TZ, day: "numeric", month: "long", year: "numeric" });
+/** « 1<sup>er</sup> juin », « 5 octobre » : début de la recherche (#36). */
+function dayMonth(d: Date) {
+  const day = Number(d.toLocaleDateString("fr-FR", { timeZone: TZ, day: "numeric" }));
+  const month = d.toLocaleDateString("fr-FR", { timeZone: TZ, month: "long" });
+  return day === 1 ? html`1<sup>er</sup> ${month}` : `${day} ${month}`;
+}
+const longDate = (d: Date) => d.toLocaleDateString("fr-FR", { timeZone: TZ, day: "numeric", month: "long", year: "numeric" });
 
 const statusSlug = (s: DisplayStatus) =>
   s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, "-");
@@ -112,6 +118,7 @@ export function listPage(
   toClassifyCount = 0,
   lastSync: Date | null = null,
   offers = { total: 0, new: 0 },
+  searchStart: Date | null = null,
 ) {
   const rows = filter ? all.filter((c) => c.status === filter) : all;
   const count = (s: DisplayStatus) => all.filter((c) => c.status === s).length;
@@ -135,7 +142,9 @@ export function listPage(
     html`<header class="entete entete-liste">
         <div>
           <h1>Mes candidatures</h1>
-          <p class="sous-titre">${all.length} candidatures depuis le 1<sup>er</sup> juin</p>
+          <p class="sous-titre">
+            ${all.length} candidatures${searchStart ? html` depuis le ${dayMonth(searchStart)}` : ""}
+          </p>
           <p class="mise-a-jour">
             ${lastSync ? `Mis à jour le ${date(lastSync)} à ${time(lastSync)}` : "Jamais synchronisé"}
           </p>
@@ -294,7 +303,8 @@ export interface OfferSettings {
   keep: string[];
   exclude: string[];
   profile: string;
-  ceilings: { produitProjet: number; developpeur: number };
+  /** Familles de la configuration et leur plafond actuel (#36). */
+  families: { cle: string; nom: string; plafond: number }[];
   /** Message après une action (erreur ou confirmation). */
   message: string | null;
 }
@@ -339,20 +349,18 @@ export function offerSettingsPage(s: OfferSettings) {
           Filtre sur l'intitulé : mots entiers, accents ignorés, « * » en fin de mot pour toutes les terminaisons
           (« chef de projet* »). Les changements s'appliquent aux prochaines annonces.
         </p>
-        ${termList("poste", "Postes recherchés", s.keep, "ex. product owner")}
-        ${termList("exclu", "Mots exclus (intitulé ou contrat)", s.exclude, "ex. alternance")}
+        ${termList("poste", "Postes recherchés", s.keep, "nouvel intitulé")}
+        ${termList("exclu", "Mots exclus (intitulé ou contrat)", s.exclude, "nouveau mot exclu")}
 
         <section class="reglage">
           <h2>Plafonds d'expérience demandée</h2>
           <form class="infos formulaire" method="post" action="/offres/reglages/plafonds">
-            <label class="info"
-              ><span class="libelle">Produit / projet (années)</span
-              ><input type="number" name="produit_projet" min="0" max="30" step="0.5" value="${s.ceilings.produitProjet}" required
-            /></label>
-            <label class="info"
-              ><span class="libelle">Développeur (années)</span
-              ><input type="number" name="developpeur" min="0" max="30" step="0.5" value="${s.ceilings.developpeur}" required
-            /></label>
+            ${s.families.map(
+              (f) => html`<label class="info"
+                ><span class="libelle">${f.nom} (années)</span
+                ><input type="number" name="plafond_${f.cle}" min="0" max="30" step="0.5" value="${f.plafond}" required
+              /></label>`,
+            )}
             <p class="aide-formulaire">Une annonce qui exige plus que le plafond est écartée. Appliqué aussi aux annonces déjà triées.</p>
             <div class="actions"><button type="submit" class="bouton bouton-principal">Enregistrer</button></div>
           </form>

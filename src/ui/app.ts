@@ -24,7 +24,8 @@ import {
   type TermKind,
   toggleOfferPriority,
 } from "../db.js";
-import { CEILING_KEYS, loadCeilings, recomputeVerdicts } from "../offer-judge.js";
+import { type Config, getConfig, startDate } from "../config.js";
+import { ceilingKey, loadCeilings, recomputeVerdicts } from "../offer-judge.js";
 import {
   DISPLAY_STATUSES,
   type DisplayStatus,
@@ -52,7 +53,7 @@ const STATUSES: Status[] = ["Envoyée", "Entretien", "Offre", "Refus"];
 const HTMX = readFileSync("node_modules/htmx.org/dist/htmx.min.js", "utf8");
 const CSS = readFileSync(new URL("./style.css", import.meta.url), "utf8");
 
-export function createApp(db: DatabaseSync, now: () => Date = () => new Date()): Hono {
+export function createApp(db: DatabaseSync, now: () => Date = () => new Date(), config: Config = getConfig()): Hono {
   const app = new Hono();
 
   // Écritures uniquement depuis l'interface elle-même : une autre page ouverte dans le navigateur
@@ -70,6 +71,7 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date()):
         listToClassify(db).length,
         lastSync ? new Date(lastSync) : null,
         countOffers(db),
+        startDate(config),
       ),
     );
   });
@@ -178,7 +180,7 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date()):
         keep: rules.keep,
         exclude: rules.exclude,
         profile: getSetting(db, PROFILE_KEY) ?? "",
-        ceilings: loadCeilings(db),
+        families: config.familles.map((f) => ({ cle: f.cle, nom: f.nom, plafond: loadCeilings(db, config.familles)[f.cle] })),
         message: MESSAGES[c.req.query("message") ?? ""] ?? null,
       }),
     );
@@ -213,15 +215,15 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date()):
 
   app.post("/offres/reglages/plafonds", async (c) => {
     const body = await c.req.parseBody();
-    const values = [body.produit_projet, body.developpeur].map((v) => Number(String(v ?? "").replace(",", ".")));
-    if ([body.produit_projet, body.developpeur].some((v) => String(v ?? "").trim() === "") ||
-        values.some((v) => !Number.isFinite(v) || v < 0 || v > 30)) {
+    // Un champ par famille de la configuration, nommé plafond_<clé>.
+    const raw = config.familles.map((f) => String(body[ceilingKey(f.cle)] ?? "").trim().replace(",", "."));
+    const values = raw.map(Number);
+    if (raw.some((v) => v === "") || values.some((v) => !Number.isFinite(v) || v < 0 || v > 30)) {
       return c.redirect("/offres/reglages?message=plafond", 303);
     }
-    setSetting(db, CEILING_KEYS.produitProjet, String(values[0]));
-    setSetting(db, CEILING_KEYS.developpeur, String(values[1]));
+    config.familles.forEach((f, i) => setSetting(db, ceilingKey(f.cle), String(values[i])));
     // Les faits relevés par Claude sont gardés : les décisions se recalculent sans le rappeler.
-    recomputeVerdicts(db);
+    recomputeVerdicts(db, config.familles);
     return c.redirect("/offres/reglages?message=plafonds", 303);
   });
 

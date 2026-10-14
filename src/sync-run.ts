@@ -14,6 +14,7 @@ import { AuthorizationRequiredError, getAuthorizedClient } from "./auth.js";
 import { DailyBudgetReachedError, withBudget } from "./budget.js";
 import { rebuildCandidatures } from "./candidatures.js";
 import { classifyMail, createClient, MODEL, PRICE_PER_MTOK } from "./classify.js";
+import { ConfigError, getConfig, startDate } from "./config.js";
 import { getSetting, openDb, PROFILE_KEY } from "./db.js";
 import { notify } from "./notify.js";
 import { DAILY_OFFER_LIMIT, judgeOffer, judgePendingOffers } from "./offer-judge.js";
@@ -30,6 +31,8 @@ const stamp = () => new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris
 const NOTIFY_TITLE = "Suivi de candidatures";
 
 async function main(): Promise<number> {
+  // Configuration lue d'abord : une erreur s'y signale avant tout accès à Gmail ou à Claude.
+  const config = getConfig();
   const api = gmail({ version: "v1", auth: await getAuthorizedClient({ interactive: !auto }) });
   const claude = createClient();
   const db = openDb();
@@ -58,7 +61,7 @@ async function main(): Promise<number> {
           if (p.result.truncated && !auto) console.log(`  (texte coupé à l'envoi : ${p.mail.id} « ${p.mail.subject} »)`);
         }
         if (!auto && processed.length % 50 === 0) console.log(`  … ${processed.length} mails traités`);
-      }));
+      }, startDate(config)));
     } catch (err) {
       // Plafond atteint : on garde ce qui a été traité, le reste attend la prochaine synchronisation.
       if (!(err instanceof DailyBudgetReachedError)) throw err;
@@ -154,6 +157,10 @@ try {
     console.log(`${stamp()} · ${message} Lancer « npm run sync » pour réautoriser.`);
     if (auto) await notify(NOTIFY_TITLE, "Autorisation Gmail expirée : lance « npm run sync » pour réautoriser.");
     process.exitCode = 2;
+  } else if (err instanceof ConfigError) {
+    console.log(`${stamp()} · ${message}`);
+    if (auto) await notify(NOTIFY_TITLE, "Configuration de la recherche invalide : voir le journal dans data/logs.");
+    process.exitCode = 1;
   } else if (isOffline(err)) {
     // Pas de réseau (Mac qui se réveille, en déplacement) : pas de notification, le mode automatique
     // réessaie à l'heure suivante.

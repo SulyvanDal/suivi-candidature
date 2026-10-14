@@ -19,6 +19,7 @@
     "test": "tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "ui": "tsx src/ui/server.ts",
+    "config:initialiser": "tsx src/config-init.ts",
     "auto:installer": "tsx src/auto-install.ts installer",
     "auto:desinstaller": "tsx src/auto-install.ts desinstaller",
     "auto:statut": "tsx src/auto-install.ts statut"
