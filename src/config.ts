@@ -28,6 +28,59 @@ const FamilySchema = z.object({
   plafondAns: z.number().min(0).max(30),
 });
 
+/** Une question peut s'écrire sur plusieurs lignes dans le fichier : elles sont réunies. */
+const question = z.union([text, z.array(text).min(1)]).transform((v) => (Array.isArray(v) ? v.join("\n") : v));
+const key = z.string().regex(/^[a-z][a-z0-9_]*$/, "minuscules, chiffres et _ uniquement");
+/** Faits relevés dans tous les cas, gérés par le code. */
+export const RESERVED_FACTS = ["type_poste", "experience_min_ans", "profil_senior", "justification"];
+const criterionKey = key.refine((k) => !RESERVED_FACTS.includes(k), "clé réservée aux faits de base");
+/** Familles concernées ; absent = toutes. */
+const families = z.array(key).min(1).optional();
+
+/** Question oui / non posée à Claude : des points si oui, ou l'annonce est écartée. */
+const YesNoSchema = z
+  .object({
+    cle: criterionKey,
+    libelle: text,
+    familles: families,
+    question,
+    points: z.number().optional(),
+    effet: z.literal("ecarter").optional(),
+  })
+  .strict()
+  .refine((c) => (c.points === undefined) !== (c.effet === undefined), "indiquer soit points, soit effet « ecarter »");
+
+/** Question à choix posée à Claude : des points selon la réponse. */
+const ChoiceSchema = z
+  .object({
+    cle: criterionKey,
+    libelle: text.optional(),
+    familles: families,
+    question,
+    choix: z
+      .array(
+        z
+          .object({
+            valeur: key,
+            /** Si présente, la valeur est détaillée sous la question pour Claude. */
+            description: text.optional(),
+            /** Affiché dans le détail des points (par défaut : le libellé du critère). */
+            libelle: text.optional(),
+            points: z.number().default(0),
+          })
+          .strict(),
+      )
+      .min(2, "au moins 2 choix"),
+  })
+  .strict();
+
+/** Critère déduit de l'expérience minimale demandée, sans question à Claude. */
+const DerivedSchema = z
+  .object({ cle: criterionKey, libelle: text, familles: families, experienceMaxAns: z.number().min(0), points: z.number() })
+  .strict();
+
+const CriterionSchema = z.union([ChoiceSchema, DerivedSchema, YesNoSchema]);
+
 const ConfigSchema = z
   .object({
     /** Début de la recherche : premier passage de la synchronisation (AAAA-MM-JJ). */
@@ -50,11 +103,57 @@ const ConfigSchema = z
     }),
     /** Mots-clés écrits en base par npm run config:initialiser (ensuite : interface). */
     motsClesDeDepart: z.object({ postes: texts, exclus: texts }),
+    /** Faits relevés par Claude en plus des faits de base, et leurs points (#37). */
+    criteres: z.array(CriterionSchema),
+    /** Priorité 1 à partir du seuil ; points selon le lieu affiché dans l'annonce. */
+    priorite: z
+      .object({
+        seuil: z.number(),
+        lieux: z.array(
+          z
+            .object({
+              nom: text,
+              /** Expression régulière, sans tenir compte des majuscules. */
+              motif: text.refine((m) => {
+                try {
+                  new RegExp(m, "i");
+                  return true;
+                } catch {
+                  return false;
+                }
+              }, "expression régulière invalide"),
+              points: z.number(),
+            })
+            .strict(),
+        ),
+      })
+      .strict(),
   })
-  .strict();
+  .strict()
+  .superRefine((config, ctx) => {
+    const familyKeys = config.familles.map((f) => f.cle);
+    const seen = new Set<string>();
+    config.criteres.forEach((c, i) => {
+      if (seen.has(c.cle)) ctx.addIssue({ code: "custom", path: ["criteres", i, "cle"], message: `clé « ${c.cle} » en double` });
+      seen.add(c.cle);
+      for (const f of c.familles ?? []) {
+        if (!familyKeys.includes(f)) {
+          ctx.addIssue({ code: "custom", path: ["criteres", i, "familles"], message: `famille « ${f} » inconnue` });
+        }
+      }
+    });
+  });
 
 export type Config = z.infer<typeof ConfigSchema>;
 export type Family = z.infer<typeof FamilySchema>;
+export type Criterion = z.infer<typeof CriterionSchema>;
+export type ChoiceCriterion = z.infer<typeof ChoiceSchema>;
+export type DerivedCriterion = z.infer<typeof DerivedSchema>;
+export type YesNoCriterion = z.infer<typeof YesNoSchema>;
+
+export const isChoice = (c: Criterion): c is ChoiceCriterion => "choix" in c;
+export const isDerived = (c: Criterion): c is DerivedCriterion => "experienceMaxAns" in c;
+export const isYesNo = (c: Criterion): c is YesNoCriterion => !isChoice(c) && !isDerived(c);
 
 export class ConfigError extends Error {}
 

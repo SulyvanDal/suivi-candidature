@@ -341,7 +341,20 @@ test("réglages : profil enregistré, profil vide refusé", async () => {
 test("réglages : plafond modifié → décisions déjà prises recalculées sans Claude ; valeur invalide refusée", async () => {
   const { db, app } = offersSetup();
   // « PO Senior » a été écarté car il exige 5 ans (plafond 4).
-  db.prepare("UPDATE offers SET job_type = 'produit_projet', experience_min = 5, senior = 0, niche_tech = 0 WHERE title = 'PO Senior'").run();
+  const facts = {
+    type_poste: "produit_projet",
+    experience_min_ans: 5,
+    profil_senior: false,
+    techno_niche: false,
+    type_employeur: "inconnu",
+    culture_ia: false,
+    stack_proche: false,
+    produit_tech: false,
+    poste_data_ia: false,
+    banque_assurance: false,
+    taille: "inconnue",
+  };
+  db.prepare("UPDATE offers SET job_type = 'produit_projet', facts = ? WHERE title = 'PO Senior'").run(JSON.stringify(facts));
   assert.doesNotMatch(await (await app.request("/offres")).text(), />PO Senior</);
 
   await post(app, "/offres/reglages/plafonds", { plafond_produit_projet: "5", plafond_developpeur: "2,5" });

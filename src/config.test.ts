@@ -7,7 +7,7 @@ import { mailSystemPrompt } from "./classify.js";
 import { type Config, ConfigError, loadConfig, parseConfig, startDate } from "./config.js";
 import { replaceTerms, termsDiff } from "./config-init.js";
 import { loadTitleRules, openDb } from "./db.js";
-import { loadCeilings, offerSystemPrompt } from "./offer-judge.js";
+import { decide, loadCeilings, offerSystemPrompt, type OfferFacts, priorityOf } from "./offer-judge.js";
 import { createApp } from "./ui/app.js";
 
 // Configurations : le modèle versionné (celle de Sulyvan, sans donnée personnelle) et une
@@ -24,14 +24,85 @@ const AUTRE: Config = {
   horsCible: "comptable, développeur…",
   mails: { demarches: [], autre: [], horsSujet: [] },
   motsClesDeDepart: { postes: ["travel manager", "account manager"], exclus: ["stage", "intérim"] },
+  criteres: [
+    { cle: "apprentissage", libelle: "apprentissage", points: 3, question: "true si l'annonce propose explicitement un contrat d'apprentissage." },
+    {
+      cle: "contrat",
+      question: "type de contrat proposé.",
+      choix: [
+        { valeur: "alternance", description: "apprentissage ou professionnalisation", libelle: "alternance", points: 1 },
+        { valeur: "cdi_cdd", description: "CDI ou CDD", points: 0 },
+        { valeur: "autre", description: "autre ou non précisé", points: 0 },
+      ],
+    },
+    { cle: "accueil", libelle: "surtout de l'accueil", familles: ["voyage_tourisme"], points: -2, question: "true si le poste consiste surtout en accueil." },
+    { cle: "agence_interim", libelle: "agence d'intérim", effet: "ecarter", question: "true si l'annonce vient d'une agence d'intérim." },
+    { cle: "debutant", libelle: "débutant accepté", experienceMaxAns: 0, points: 1 },
+  ],
+  priorite: {
+    seuil: 4,
+    lieux: [
+      { nom: "Paris", motif: "paris|\\b75\\b", points: 1 },
+      { nom: "Bordeaux", motif: "bordeaux", points: 1 },
+    ],
+  },
 };
 
 const tmp = mkdtempSync(join(tmpdir(), "suivi-config-"));
 after(() => rmSync(tmp, { recursive: true, force: true }));
 
-test("modèle versionné : consignes envoyées à Claude identiques au caractère près à celles d'avant la configuration", () => {
+test("modèle versionné : consignes envoyées à Claude identiques à celles d'avant la configuration", () => {
   assert.equal(mailSystemPrompt(EXEMPLE.mails), readFileSync("src/testdata/consignes-mails.txt", "utf8"));
-  assert.equal(offerSystemPrompt(EXEMPLE), readFileSync("src/testdata/consignes-annonces.txt", "utf8"));
+  // Annonces : seule la ligne banque / assurance change (#37) : l'exception « sauf startup », qui
+  // était dans le code, passe dans la question posée à Claude.
+  const before = readFileSync("src/testdata/consignes-annonces.txt", "utf8").split("\n");
+  const after = offerSystemPrompt(EXEMPLE).split("\n");
+  assert.equal(after.length, before.length);
+  const changed = after.map((line, i) => [before[i], line]).filter(([b, a]) => a !== b);
+  assert.deepEqual(changed, [
+    [
+      "- banque_assurance : true si l'employeur réel est une banque, une assurance ou une mutuelle, ou si la mission s'y déroule.",
+      "- banque_assurance : true si l'employeur réel est une banque, une assurance ou une mutuelle, ou si la mission s'y déroule ; false s'il s'agit d'une startup ou d'une scale-up.",
+    ],
+  ]);
+});
+
+test("autre recherche : ses critères dans les consignes, choix décrits détaillés, critère déduit absent", () => {
+  const prompt = offerSystemPrompt(AUTRE);
+  assert.match(prompt, /- apprentissage : true si l'annonce propose explicitement un contrat d'apprentissage\./);
+  assert.match(
+    prompt,
+    /- contrat : type de contrat proposé\.\n  - alternance : apprentissage ou professionnalisation ;\n  - cdi_cdd : CDI ou CDD ;\n  - autre : autre ou non précisé\.\n/,
+  );
+  assert.doesNotMatch(prompt, /debutant|stack_proche|techno_niche|banque_assurance/);
+  assert.match(prompt, /- agence_interim : .*\n- justification :/);
+});
+
+test("autre recherche : points de ses critères, lieux multiples, critère « écarter » et critère limité à une famille", () => {
+  const facts = (f: Partial<OfferFacts>): OfferFacts => ({
+    type_poste: "commercial_marketing",
+    experience_min_ans: null,
+    profil_senior: false,
+    apprentissage: false,
+    contrat: "cdi_cdd",
+    accueil: false,
+    agence_interim: false,
+    justification: "",
+    ...f,
+  });
+  assert.deepEqual(priorityOf(facts({ apprentissage: true, contrat: "alternance", experience_min_ans: 0 }), "Paris 8e - 75", AUTRE), {
+    level: 1,
+    points: 6,
+    details: ["Paris +1", "apprentissage +3", "alternance +1", "débutant accepté +1"],
+  });
+  // « accueil » ne vaut que pour la famille voyage et tourisme.
+  assert.equal(priorityOf(facts({ accueil: true }), null, AUTRE)?.points, 0);
+  assert.equal(priorityOf(facts({ type_poste: "voyage_tourisme", accueil: true }), "Bordeaux", AUTRE)?.points, -1);
+  assert.deepEqual(decide(facts({ agence_interim: true }), { commercial_marketing: 2 }, AUTRE.criteres), {
+    decision: "ecarter",
+    raison: "hors_cible",
+  });
+  assert.equal(decide(facts({}), { commercial_marketing: 2 }, AUTRE.criteres).decision, "garder");
 });
 
 test("autre recherche : familles, exemples hors cible et règles des mails viennent de sa configuration", () => {
@@ -77,6 +148,24 @@ test("configuration invalide : message clair, avec l'endroit de chaque erreur", 
   assert.match(message, /inconnu/);
   assert.match(errorOf({ ...AUTRE, familles: [AUTRE.familles[0]] }), /familles : exactement 2 familles/);
   assert.match(errorOf({ ...AUTRE, familles: [AUTRE.familles[0], AUTRE.familles[0]] }), /clés différentes/);
+});
+
+test("critères invalides : famille inconnue, clé en double ou réservée, ni points ni effet, motif de lieu invalide", () => {
+  const errorOf = (patch: Partial<Config>) => {
+    try {
+      parseConfig({ ...AUTRE, ...patch });
+    } catch (err) {
+      assert.ok(err instanceof ConfigError);
+      return err.message;
+    }
+    assert.fail("configuration acceptée à tort");
+  };
+  const yesNo = { cle: "x", libelle: "x", question: "true si…", points: 1 };
+  assert.match(errorOf({ criteres: [{ ...yesNo, familles: ["inconnue"] }] }), /criteres\.0\.familles : famille « inconnue » inconnue/);
+  assert.match(errorOf({ criteres: [yesNo, yesNo] }), /criteres\.1\.cle : clé « x » en double/);
+  assert.match(errorOf({ criteres: [{ ...yesNo, cle: "type_poste" }] }), /clé réservée/);
+  assert.match(errorOf({ criteres: [{ cle: "x", libelle: "x", question: "true si…" } as never] }), /soit points, soit effet/);
+  assert.match(errorOf({ priorite: { seuil: 4, lieux: [{ nom: "x", motif: "(", points: 1 }] } }), /expression régulière invalide/);
 });
 
 test("fichier absent ou JSON invalide : message qui dit quoi faire", () => {

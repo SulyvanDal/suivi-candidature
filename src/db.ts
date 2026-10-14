@@ -187,6 +187,28 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE offers ADD COLUMN data_ai_role INTEGER;
   `,
+  // 16 — Faits relevés en JSON, quels que soient les critères de la configuration (#37). Les faits
+  // déjà relevés (colonnes des migrations 10, 14, 15) y sont recopiés ; l'exception « banque /
+  // assurance, sauf startup » (ancien code) est appliquée au passage, la question à Claude l'inclut
+  // désormais. Les anciennes colonnes restent, inutilisées (sauf job_type).
+  `
+  ALTER TABLE offers ADD COLUMN facts TEXT;
+  UPDATE offers SET facts = json_object(
+      'type_poste', job_type,
+      'experience_min_ans', experience_min,
+      'profil_senior', json(CASE senior WHEN 1 THEN 'true' ELSE 'false' END),
+      'techno_niche', json(CASE niche_tech WHEN 1 THEN 'true' ELSE 'false' END),
+      'type_employeur', employer_type,
+      'culture_ia', CASE WHEN ai_culture IS NULL THEN NULL ELSE json(CASE ai_culture WHEN 1 THEN 'true' ELSE 'false' END) END,
+      'stack_proche', CASE WHEN stack_match IS NULL THEN NULL ELSE json(CASE stack_match WHEN 1 THEN 'true' ELSE 'false' END) END,
+      'produit_tech', CASE WHEN product_tech IS NULL THEN NULL ELSE json(CASE product_tech WHEN 1 THEN 'true' ELSE 'false' END) END,
+      'poste_data_ia', CASE WHEN data_ai_role IS NULL THEN NULL ELSE json(CASE data_ai_role WHEN 1 THEN 'true' ELSE 'false' END) END,
+      'banque_assurance', CASE WHEN bank_insurance IS NULL THEN NULL
+        WHEN bank_insurance = 1 AND employer_type IS NOT 'editeur_startup' AND company_size IS NOT 'startup_scaleup'
+        THEN json('true') ELSE json('false') END,
+      'taille', company_size)
+  WHERE job_type IS NOT NULL;
+  `,
 ];
 
 /** Attente maximale quand une autre connexion écrit (interface ouverte pendant la synchronisation). */

@@ -7,6 +7,7 @@
 
 import { readFileSync } from "node:fs";
 import { createClient, PRICE_PER_MTOK } from "./classify.js";
+import { getConfig } from "./config.js";
 import { getSetting, openDb, PROFILE_KEY } from "./db.js";
 import { decide, judgeOffer, loadCeilings, type OfferToJudge } from "./offer-judge.js";
 
@@ -24,7 +25,8 @@ const db = openDb();
 const profile = getSetting(db, PROFILE_KEY);
 if (!profile) throw new Error("Profil du candidat absent de la base.");
 const claude = createClient();
-const ceilings = loadCeilings(db);
+const config = getConfig();
+const ceilings = loadCeilings(db, config.familles);
 
 let ok = 0;
 const tokens = { input: 0, output: 0 };
@@ -40,7 +42,7 @@ for (const a of annotations) {
     continue;
   }
   const { facts, usage } = await judgeOffer(claude, profile, offer);
-  const judgment = decide(facts, ceilings);
+  const judgment = decide(facts, ceilings, config.criteres);
   tokens.input += usage.inputTokens;
   tokens.output += usage.outputTokens;
   if (judgment.decision === a.expected) {
@@ -53,7 +55,7 @@ for (const a of annotations) {
   errors.push(
     `  #${a.id} ${offer.title} — ${offer.company ?? "?"}\n` +
       `     attendu ${a.expected}${a.note ? ` (${a.note})` : ""}, obtenu ${judgment.decision} / ${judgment.raison}\n` +
-      `     faits : ${facts ? `${facts.type_poste}, ${facts.experience_min_ans ?? "durée non chiffrée"}, senior=${facts.profil_senior}, niche=${facts.techno_niche}` : "aucun"} — ${facts?.justification ?? ""}`,
+      `     faits : ${facts ? JSON.stringify({ ...facts, justification: undefined }) : "aucun"} — ${facts?.justification ?? ""}`,
   );
 }
 db.close();

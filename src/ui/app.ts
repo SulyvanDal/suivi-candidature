@@ -223,7 +223,7 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date(), 
     }
     config.familles.forEach((f, i) => setSetting(db, ceilingKey(f.cle), String(values[i])));
     // Les faits relevés par Claude sont gardés : les décisions se recalculent sans le rappeler.
-    recomputeVerdicts(db, config.familles);
+    recomputeVerdicts(db, config);
     return c.redirect("/offres/reglages?message=plafonds", 303);
   });
 

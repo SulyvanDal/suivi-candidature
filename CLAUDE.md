@@ -102,8 +102,17 @@ lecture du corps des mails.
   personne, mots-clés de départ. Consignes de Claude construites à partir de la configuration ;
   avec le modèle versionné, identiques au caractère près à celles d'avant (`src/testdata/`, test).
   Les tests ne lisent jamais `config/recherche.json` : la configuration est passée explicitement.
-  Profil, mots-clés et plafonds : en base, modifiables dans l'interface. Critères de priorité
-  encore dans le code jusqu'à #37.
+  Profil, mots-clés et plafonds : en base, modifiables dans l'interface.
+- **Critères configurables** (#37) : `criteres` de la configuration = questions oui / non (points, ou
+  `effet: "ecarter"`), questions à choix (points par valeur ; choix décrits détaillés sous la
+  question), critères déduits de l'expérience (`experienceMaxAns`) ; `familles` limite un critère à
+  une famille. Pas de conditions entre critères : l'exception va dans la question (« banque /
+  assurance… ; false s'il s'agit d'une startup »). `priorite` : seuil et lieux (expressions
+  régulières). Consignes et format de réponse de Claude construits à partir de la liste ; faits
+  stockés en JSON (`offers.facts`, migration 16, anciennes colonnes inutilisées sauf `job_type`).
+  Faits de base gérés par le code : `type_poste`, `experience_min_ans`, `profil_senior`. Passage
+  vérifié : 247/247 annonces avec décision et priorité identiques ; évaluations 51/53 (tri) et 47/50
+  (priorité) avec la nouvelle question banque / assurance.
 
 - Client OAuth de type **Application de bureau** ; redirection vers `http://127.0.0.1:<port libre>`.
 - Flux implémenté directement avec `google-auth-library` (pas `@google-cloud/local-auth`,
@@ -206,10 +215,9 @@ lecture du corps des mails.
   « Ignorer » (`ignored_at`) ; compteurs des écartées sur 7 jours et des annonces en cours de tri.
   La pastille « nouveau » est retirée sur place au clic (`hx-on`). Étoile (#27, `prioritized_at`) :
   prioritaires dans un bloc en tête, bascule sans rechargement (`hx-select="#offres-liste"`).
-  Priorité calculée (#26, `priorityOf`) : Claude relève employeur, culture IA, stack proche, produit +
-  tech, poste data / IA, banque / assurance, taille (même appel que le tri) ; le code compte les points
-  (poste data / IA +3, stack proche +2, junior, produit + tech, employeur final, IA, Bordeaux, taille
-  moyenne +1, banque / assurance hors startup −2 ; priorité 1 dès 4). Barème revu après évaluation
+  Priorité calculée (#26, `priorityOf`) : critères et points de la configuration (#37) ; barème de
+  Sulyvan : poste data / IA +3, stack proche +2, junior, produit + tech, employeur final, IA,
+  Bordeaux, taille moyenne +1, banque / assurance hors startup −2 ; priorité 1 dès 4. Barème revu après évaluation
   sur les étoiles de l'utilisateur (le type d'employeur comptait trop : 1/6, puis 5/6 avec 5 en trop
   sur 50) ; à reprendre plus tard avec davantage d'étoiles. Ordre : étoiles, priorité 1, reste ;
   pastille « prio » avec le détail des points au survol.

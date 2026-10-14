@@ -93,6 +93,8 @@ cp config/exemple.json config/recherche.json
 | `horsCible` | Exemples de postes hors cible malgré un intitulé proche |
 | `mails` | Règles de classement propres : `demarches` autres qu'une candidature, phrases ajoutées à « autre », cas ajoutés à « hors sujet » |
 | `motsClesDeDepart` | Postes recherchés et mots exclus de départ |
+| `criteres` | Faits relevés par Claude sur chaque annonce et leurs points : question oui / non (`points`, ou `"effet": "ecarter"`), question à choix (`choix` avec points par valeur), critère déduit de l'expérience (`experienceMaxAns`) ; `familles` limite un critère à certaines familles |
+| `priorite` | `seuil` de la priorité 1 et `lieux` qui rapportent des points (`motif` : expression régulière) |
 
 Le fichier est vérifié à chaque lancement : une erreur s'affiche avec l'endroit en cause. Les
 mots-clés de départ s'écrivent ensuite en base, puis se modifient dans l'interface :

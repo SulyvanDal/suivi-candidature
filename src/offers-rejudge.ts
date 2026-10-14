@@ -6,6 +6,7 @@
 // Appelle Claude : quelques centimes.
 
 import { createClient, MODEL, PRICE_PER_MTOK } from "./classify.js";
+import { getConfig } from "./config.js";
 import { getSetting, openDb, PROFILE_KEY } from "./db.js";
 import { decide, judgeOffer, loadCeilings, type OfferToJudge, priorityOf, saveJudgment } from "./offer-judge.js";
 
@@ -14,27 +15,28 @@ const db = openDb();
 const profile = getSetting(db, PROFILE_KEY);
 if (!profile) throw new Error("Profil du candidat absent de la base.");
 const claude = createClient();
-const ceilings = loadCeilings(db);
+const config = getConfig();
+const ceilings = loadCeilings(db, config.familles);
 
 const all = process.argv.includes("--toutes");
 const offers = db
   .prepare(
     `SELECT id, title, company, location, contract, description FROM offers
      WHERE page_status = 'lue' AND verdict = 'garder'
-       ${all ? "" : "AND (priority IS NULL OR data_ai_role IS NULL)"} ORDER BY id`,
+       ${all ? "" : "AND priority IS NULL"} ORDER BY id`,
   )
   .all() as unknown as ({ id: number } & OfferToJudge)[];
 
 const stats = { prio1: 0, prio2: 0, nowRejected: 0, input: 0, output: 0 };
 for (const offer of offers) {
   const { facts, usage } = await judgeOffer(claude, profile, offer);
-  const judgment = decide(facts, ceilings);
-  const priority = priorityOf(facts, offer.location);
+  const judgment = decide(facts, ceilings, config.criteres);
+  const priority = priorityOf(facts, offer.location, config);
   saveJudgment(db, offer.id, facts, judgment, priority, MODEL, new Date());
   stats.input += usage.inputTokens;
   stats.output += usage.outputTokens;
   if (judgment.decision === "ecarter") stats.nowRejected++;
-  else if (priority.level === 1) stats.prio1++;
+  else if (priority?.level === 1) stats.prio1++;
   else stats.prio2++;
 }
 db.close();

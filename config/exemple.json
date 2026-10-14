@@ -53,5 +53,124 @@
       "tech lead",
       "intérim"
     ]
+  },
+  "criteres": [
+    {
+      "cle": "techno_niche",
+      "libelle": "technologie de niche",
+      "familles": [
+        "developpeur"
+      ],
+      "effet": "ecarter",
+      "question": "pour un poste de développeur, true si la technologie principale est de niche ou vieillissante (RPG, IBM i, AS/400, Cobol, mainframe, Salesforce, SAP ABAP, Pacbase…) ; false pour les technologies courantes ou en vogue, et pour tout autre type de poste."
+    },
+    {
+      "cle": "type_employeur",
+      "question": "qui emploie réellement la personne.",
+      "choix": [
+        {
+          "valeur": "entreprise_finale",
+          "libelle": "entreprise finale",
+          "points": 1,
+          "description": "l'entreprise qui utilise le produit ou le service (banque, industriel, distributeur, administration…), y compris son service informatique"
+        },
+        {
+          "valeur": "editeur_startup",
+          "libelle": "éditeur ou startup",
+          "points": 1,
+          "description": "éditeur de logiciel, startup ou scale-up qui développe son propre produit"
+        },
+        {
+          "valeur": "esn_conseil",
+          "description": "ESN, société de conseil ou d'ingénierie qui place ses salariés en mission chez des clients"
+        },
+        {
+          "valeur": "cabinet_recrutement",
+          "description": "annonce publiée par un cabinet ou une agence de recrutement pour le compte d'un client (« notre client », « pour le compte de »), quel que soit ce client"
+        },
+        {
+          "valeur": "inconnu",
+          "description": "impossible à déterminer"
+        }
+      ]
+    },
+    {
+      "cle": "culture_ia",
+      "libelle": "culture IA",
+      "points": 1,
+      "question": "true si l'entreprise met en avant l'intelligence artificielle dans son produit, sa culture ou ses pratiques (pas une simple mention dans une liste de compétences)."
+    },
+    {
+      "cle": "stack_proche",
+      "libelle": "stack proche",
+      "familles": [
+        "developpeur"
+      ],
+      "points": 2,
+      "question": "pour un poste de développeur, true si la stack principale correspond aux technologies de développeur visées dans le profil ; false sinon, et pour tout autre type de poste."
+    },
+    {
+      "cle": "junior",
+      "libelle": "junior",
+      "familles": [
+        "developpeur"
+      ],
+      "experienceMaxAns": 1,
+      "points": 1
+    },
+    {
+      "cle": "produit_tech",
+      "libelle": "produit + tech",
+      "familles": [
+        "produit_projet"
+      ],
+      "points": 1,
+      "question": "true si le poste mêle clairement la dimension produit et la dimension technique (PO technique, product builder, PO qui travaille au plus près du code ou de l'architecture…)."
+    },
+    {
+      "cle": "poste_data_ia",
+      "libelle": "poste data / IA",
+      "familles": [
+        "produit_projet"
+      ],
+      "points": 3,
+      "question": "pour un poste produit ou projet, true si le poste porte sur un produit de données ou d'intelligence artificielle (Data Product Owner, Data Product Manager, PO IA, plateforme data, produits à base de modèles…) ; false sinon, et pour un poste de développeur."
+    },
+    {
+      "cle": "banque_assurance",
+      "libelle": "banque / assurance",
+      "points": -2,
+      "question": "true si l'employeur réel est une banque, une assurance ou une mutuelle, ou si la mission s'y déroule ; false s'il s'agit d'une startup ou d'une scale-up."
+    },
+    {
+      "cle": "taille",
+      "question": "startup_scaleup, pme_eti (de quelques dizaines à quelques milliers de salariés), grand_groupe, ou inconnue si l'annonce ne permet pas de le dire.",
+      "choix": [
+        {
+          "valeur": "startup_scaleup"
+        },
+        {
+          "valeur": "pme_eti",
+          "libelle": "taille moyenne",
+          "points": 1
+        },
+        {
+          "valeur": "grand_groupe"
+        },
+        {
+          "valeur": "inconnue"
+        }
+      ]
+    }
+  ],
+  "priorite": {
+    "seuil": 4,
+    "lieux": [
+      {
+        "nom": "Bordeaux",
+        "motif": "bordeaux|m[ée]rignac|pessac|talence|b[èe]gles|cenon|gironde|\\b33\\d{3}\\b|\\b33\\b",
+        "points": 1
+      }
+    ]
   }
 }

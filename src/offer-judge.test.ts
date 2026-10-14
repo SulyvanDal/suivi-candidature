@@ -13,7 +13,7 @@ import {
 } from "./offer-judge.js";
 
 // Annonces fabriquées et faux Claude : aucun appel réel. Configuration : le modèle versionné.
-const FAMILIES = loadConfig("config/exemple.json").familles;
+const CONFIG = loadConfig("config/exemple.json");
 const CEILINGS = { produit_projet: 4, developpeur: 2 };
 
 function setup() {
@@ -67,29 +67,33 @@ function setup() {
 
 test("seules les annonces lues et pas encore jugées partent chez Claude ; décision enregistrée", async () => {
   const { db, judge, judged } = setup();
-  const stats = await judgePendingOffers(db, judge, { model: "modele-test", families: FAMILIES });
+  const stats = await judgePendingOffers(db, judge, { model: "modele-test", config: CONFIG });
 
   assert.deepEqual(judged, ["Product Owner", "Chef de projet senior", "Business Analyst"]);
   assert.deepEqual(stats, { kept: 2, rejected: 1, waiting: 0, inputTokens: 3000, outputTokens: 150 });
   const row = db
-    .prepare("SELECT verdict, verdict_reason, justification, model, job_type, experience_min, senior FROM offers WHERE title = ?")
-    .get("Chef de projet senior");
+    .prepare("SELECT verdict, verdict_reason, justification, model, job_type, facts FROM offers WHERE title = ?")
+    .get("Chef de projet senior") as Record<string, unknown>;
   assert.deepEqual(
-    { ...row },
+    { ...row, facts: undefined },
     {
       verdict: "ecarter",
       verdict_reason: "seniorite",
       justification: "8 ans demandés.",
       model: "modele-test",
       job_type: "produit_projet",
-      experience_min: 8,
-      senior: 1,
+      facts: undefined,
     },
   );
+  // Faits enregistrés en JSON (#37), sans la justification (déjà dans sa colonne).
+  const stored = JSON.parse(row.facts as string);
+  assert.equal(stored.experience_min_ans, 8);
+  assert.equal(stored.type_employeur, "esn_conseil");
+  assert.equal(stored.justification, undefined);
 
   // Second passage : rien de nouveau à juger.
   judged.length = 0;
-  await judgePendingOffers(db, judge, { families: FAMILIES });
+  await judgePendingOffers(db, judge, { config: CONFIG });
   assert.deepEqual(judged, []);
 });
 
@@ -99,16 +103,16 @@ test("plafond quotidien compté sur la journée entière, toutes synchronisation
   const evening = new Date(2026, 9, 7, 20, 0);
   const tomorrow = new Date(2026, 9, 8, 8, 0);
 
-  assert.equal((await judgePendingOffers(db, judge, { dailyLimit: 2, now: morning, families: FAMILIES })).waiting, 1);
+  assert.equal((await judgePendingOffers(db, judge, { dailyLimit: 2, now: morning, config: CONFIG })).waiting, 1);
   assert.deepEqual(judged, ["Product Owner", "Chef de projet senior"]);
 
   // Même jour : plafond déjà atteint, rien n'est envoyé.
   judged.length = 0;
-  assert.equal((await judgePendingOffers(db, judge, { dailyLimit: 2, now: evening, families: FAMILIES })).waiting, 1);
+  assert.equal((await judgePendingOffers(db, judge, { dailyLimit: 2, now: evening, config: CONFIG })).waiting, 1);
   assert.deepEqual(judged, []);
 
   // Lendemain : la suite passe.
-  await judgePendingOffers(db, judge, { dailyLimit: 2, now: tomorrow, families: FAMILIES });
+  await judgePendingOffers(db, judge, { dailyLimit: 2, now: tomorrow, config: CONFIG });
   assert.deepEqual(judged, ["Business Analyst"]);
 });
 
@@ -127,7 +131,12 @@ const facts = (f: Partial<OfferFacts>): OfferFacts => ({
   justification: "",
   ...f,
 });
-const verdict = (f: Partial<OfferFacts>) => decide(facts(f), CEILINGS);
+const verdict = (f: Partial<OfferFacts>) => decide(facts(f), CEILINGS, CONFIG.criteres);
+const priority = (f: OfferFacts | null, location: string | null) => {
+  const p = priorityOf(f, location, CONFIG);
+  assert.ok(p, "priorité calculée");
+  return p;
+};
 
 test("décision : minimum exigé comparé au plafond (4 ans produit/projet, 2 ans développeur), égalité gardée", () => {
   assert.deepEqual(verdict({ experience_min_ans: 3 }), { decision: "garder", raison: "correspond" });
@@ -144,7 +153,7 @@ test("décision : sans durée, seul un poste explicitement senior est écarté ;
   assert.deepEqual(verdict({ profil_senior: true }), { decision: "ecarter", raison: "seniorite" });
   assert.deepEqual(verdict({ type_poste: "autre" }), { decision: "ecarter", raison: "hors_cible" });
   assert.deepEqual(verdict({ type_poste: "developpeur", techno_niche: true }), { decision: "ecarter", raison: "hors_cible" });
-  // Techno de niche ignorée hors développement.
+  // Critère « écarter » limité aux développeurs (configuration) : ignoré pour un poste produit.
   assert.equal(verdict({ techno_niche: true }).decision, "garder");
   // Pas de faits (refus de Claude) : gardée.
   assert.deepEqual(decide(null, CEILINGS), { decision: "garder", raison: "correspond" });
@@ -155,53 +164,56 @@ test("décision : sans durée, seul un poste explicitement senior est écarté ;
 test("priorité : poste data / IA et stack proche pèsent le plus, priorité 1 à partir de 4", () => {
   // PO data en ESN de taille moyenne, culture IA : 3 + 1 + 1 = 5 (l'ESN n'empêche pas la priorité).
   assert.deepEqual(
-    priorityOf(facts({ poste_data_ia: true, type_employeur: "esn_conseil", culture_ia: true, taille: "pme_eti" }), "Paris"),
-    { level: 1, points: 5, details: ["poste data / IA +3", "culture IA +1", "taille moyenne +1"] },
+    priority(facts({ poste_data_ia: true, type_employeur: "esn_conseil", culture_ia: true, taille: "pme_eti" }), "Paris"),
+    { level: 1, points: 5, details: ["culture IA +1", "poste data / IA +3", "taille moyenne +1"] },
   );
   // Développeur junior sur sa stack, à Bordeaux : 1 + 2 + 1 = 4.
-  assert.deepEqual(priorityOf(facts({ type_poste: "developpeur", stack_proche: true, experience_min_ans: 0 }), "Bordeaux - 33"), {
+  assert.deepEqual(priority(facts({ type_poste: "developpeur", stack_proche: true, experience_min_ans: 0 }), "Bordeaux - 33"), {
     level: 1,
     points: 4,
     details: ["Bordeaux +1", "stack proche +2", "junior +1"],
   });
   // Développeur sur sa stack en ESN parisienne, 3 ans demandés : 2 points.
-  assert.equal(priorityOf(facts({ type_poste: "developpeur", type_employeur: "esn_conseil", stack_proche: true, experience_min_ans: 3 }), "Paris").level, 2);
+  assert.equal(priority(facts({ type_poste: "developpeur", type_employeur: "esn_conseil", stack_proche: true, experience_min_ans: 3 }), "Paris").level, 2);
   // Critères propres à chaque famille de poste : la stack ne compte pas pour un PO, ni « data / IA » pour un développeur.
-  assert.equal(priorityOf(facts({ stack_proche: true }), null).points, 0);
-  assert.equal(priorityOf(facts({ type_poste: "developpeur", poste_data_ia: true, produit_tech: true }), null).points, 0);
+  assert.equal(priority(facts({ stack_proche: true }), null).points, 0);
+  assert.equal(priority(facts({ type_poste: "developpeur", poste_data_ia: true, produit_tech: true }), null).points, 0);
   // Startup produit + tech : 1 + 1 = 2.
-  assert.equal(priorityOf(facts({ type_employeur: "editeur_startup", produit_tech: true }), "Paris").points, 2);
+  assert.equal(priority(facts({ type_employeur: "editeur_startup", produit_tech: true }), "Paris").points, 2);
 });
 
-test("priorité : banque / assurance pénalisée sauf startup ou scale-up ; lieux de la Gironde reconnus", () => {
+test("priorité : banque / assurance pénalisée ; lieux de la Gironde reconnus", () => {
   const banque = facts({ type_employeur: "entreprise_finale", banque_assurance: true, taille: "grand_groupe" });
-  assert.deepEqual(priorityOf(banque, "Paris"), { level: 2, points: -1, details: ["entreprise finale +1", "banque / assurance -2"] });
-  const neobanque = facts({ type_employeur: "editeur_startup", banque_assurance: true, taille: "startup_scaleup" });
-  assert.equal(priorityOf(neobanque, "Paris").points, 1);
+  assert.deepEqual(priority(banque, "Paris"), { level: 2, points: -1, details: ["entreprise finale +1", "banque / assurance -2"] });
+  // L'exception « sauf startup » est dans la question posée à Claude (#37) : pour une néobanque,
+  // il répond banque_assurance = false.
+  const neobanque = facts({ type_employeur: "editeur_startup", banque_assurance: false, taille: "startup_scaleup" });
+  assert.equal(priority(neobanque, "Paris").points, 1);
   for (const lieu of ["33300 Bordeaux", "Mérignac - 33", "Pessac", "Bordeaux (33)"]) {
-    assert.equal(priorityOf(facts({}), lieu).points, 1, lieu);
+    assert.equal(priority(facts({}), lieu).points, 1, lieu);
   }
-  assert.equal(priorityOf(facts({}), "Paris 8e - 75").points, 0);
+  assert.equal(priority(facts({}), "Paris 8e - 75").points, 0);
   // Sans faits (refus de Claude) : seul le lieu compte.
-  assert.deepEqual(priorityOf(null, "Bordeaux"), { level: 2, points: 1, details: ["Bordeaux +1"] });
+  assert.deepEqual(priority(null, "Bordeaux"), { level: 2, points: 1, details: ["Bordeaux +1"] });
 });
 
-test("priorité enregistrée au tri, et recalculée sans Claude (annonces triées avant #26 : sans priorité)", async () => {
+test("priorité enregistrée au tri, et recalculée sans Claude (critère sans valeur enregistrée : sans priorité)", async () => {
   const { db, judge } = setup();
-  await judgePendingOffers(db, judge, { families: FAMILIES });
+  await judgePendingOffers(db, judge, { config: CONFIG });
   const row = () =>
     db.prepare("SELECT priority, priority_points, priority_details FROM offers WHERE title = 'Product Owner'").get();
-  // Poste data / IA +3, produit + tech +1, éditeur/startup +1, IA +1, PME/ETI +1 = 7.
+  // Éditeur/startup +1, IA +1, produit + tech +1, poste data / IA +3, PME/ETI +1 = 7 (ordre de la configuration).
   assert.deepEqual(
     { ...row() },
     {
       priority: 1,
       priority_points: 7,
-      priority_details: "poste data / IA +3, produit + tech +1, éditeur ou startup +1, culture IA +1, taille moyenne +1",
+      priority_details: "éditeur ou startup +1, culture IA +1, produit + tech +1, poste data / IA +3, taille moyenne +1",
     },
   );
 
-  db.prepare("UPDATE offers SET data_ai_role = NULL WHERE title = 'Product Owner'").run();
-  recomputeVerdicts(db, FAMILIES);
+  // Critère ajouté à la configuration après le tri de l'annonce : pas de valeur, pas de priorité.
+  db.prepare("UPDATE offers SET facts = json_remove(facts, '$.poste_data_ia') WHERE title = 'Product Owner'").run();
+  recomputeVerdicts(db, CONFIG);
   assert.deepEqual({ ...row() }, { priority: null, priority_points: null, priority_details: null });
 });
