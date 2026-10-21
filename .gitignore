@@ -7,5 +7,6 @@ data/
 node_modules/
 .DS_Store
 
-# Configuration de la recherche de cette installation (modèle : config/exemple.json)
-config/recherche.json
+# Configurations de recherche (personnelles : le dépôt est public) ; seul le modèle est versionné
+config/*
+!config/exemple.json

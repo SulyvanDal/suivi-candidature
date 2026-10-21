@@ -102,7 +102,9 @@ lecture du corps des mails.
   personne, mots-clés de départ. Consignes de Claude construites à partir de la configuration ;
   avec le modèle versionné, identiques au caractère près à celles d'avant (`src/testdata/`, test).
   Les tests ne lisent jamais `config/recherche.json` : la configuration est passée explicitement.
-  Profil, mots-clés et plafonds : en base, modifiables dans l'interface.
+  Profil, mots-clés et plafonds : en base, modifiables dans l'interface. Tout `config/` est exclu de
+  git sauf `exemple.json` ; configuration et profil de la deuxième utilisatrice préparés dans
+  `config/deuxieme-utilisatrice.json` et `config/deuxieme-utilisatrice-profil.txt` (#38).
 - **Critères configurables** (#37) : `criteres` de la configuration = questions oui / non (points, ou
   `effet: "ecarter"`), questions à choix (points par valeur ; choix décrits détaillés sous la
   question), critères déduits de l'expérience (`experienceMaxAns`) ; `familles` limite un critère à
@@ -253,3 +255,5 @@ Suivie dans les issues GitHub (`gh issue list`) :
    #19 fusionner / détacher
 8. Veille des offres : #20 fiche (terminée), #21 extraction et stockage des annonces, #22 description
    de la page, #23 filtre par Claude, #24 page « Offres à regarder », #25 édition des listes
+10. Deuxième utilisatrice : #36 configuration par personne, #37 critères configurables (terminées),
+   #38 sa configuration, #39 ses alertes et les mails de l'école, #40 installation sur son Mac
