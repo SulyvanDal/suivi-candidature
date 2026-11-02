@@ -6,6 +6,7 @@
 
 import type { DatabaseSync } from "node:sqlite";
 import { convert } from "html-to-text";
+import { type Platform, readsPage } from "./offers.js";
 
 /** Au-delà, la description est coupée (comme le texte des mails envoyé à Claude). */
 export const MAX_DESCRIPTION_CHARS = 8000;
@@ -84,6 +85,7 @@ function candidates(data: unknown): JobPosting[] {
 /**
  * Lit, une par une, les pages des annonces gardées par le filtre sur l'intitulé et pas encore lues.
  * Ne lève pas d'erreur pour une page : un échec passager laisse l'annonce en attente.
+ * Les pages qu'on ne lit pas (LinkedIn) ne sont pas ouvertes : annonce non vérifiée d'emblée.
  */
 export async function readPendingPages(
   db: DatabaseSync,
@@ -91,14 +93,20 @@ export async function readPendingPages(
   pauseMs = PAUSE_MS,
 ): Promise<{ read: number; unverified: number; retry: number }> {
   const pending = db
-    .prepare("SELECT id, url FROM offers WHERE title_keep = 1 AND page_status IS NULL ORDER BY id")
-    .all() as { id: number; url: string }[];
+    .prepare("SELECT id, url, platform FROM offers WHERE title_keep = 1 AND page_status IS NULL ORDER BY id")
+    .all() as { id: number; url: string; platform: Platform }[];
   const stats = { read: 0, unverified: 0, retry: 0 };
   const now = () => new Date().toISOString();
 
-  for (const [i, { id, url }] of pending.entries()) {
-    if (i > 0 && pauseMs > 0) await new Promise((r) => setTimeout(r, pauseMs));
-    const r = await read(url);
+  let opened = 0;
+  for (const { id, url, platform } of pending) {
+    let r: PageResult;
+    if (!readsPage(platform)) {
+      r = { status: "non_verifiee", url, error: "page non lue (connexion requise)" };
+    } else {
+      if (opened++ > 0 && pauseMs > 0) await new Promise((r) => setTimeout(r, pauseMs));
+      r = await read(url);
+    }
     if (r.status === "a_reessayer") {
       stats.retry++;
       db.prepare("UPDATE offers SET page_error = ? WHERE id = ?").run(r.error, id);

@@ -34,6 +34,16 @@ Intérim
 
 Voir l’offre [https://emails.hellowork.com/clic/2bis]
 
+Responsable Grands Comptes H/F [https://emails.hellowork.com/clic/3]
+
+Île-de-France
+
+CDI
+
+50 000 - 75 000 € / an
+
+Voir l’offre [https://emails.hellowork.com/clic/3bis]
+
 Voir toutes les offres [https://emails.hellowork.com/clic/tout]`;
 
 const INDEED = `Bonjour A,
@@ -66,14 +76,65 @@ Exemple [http://t.welcometothejungle.com/3] Product Builder - Outils internes (C
 
 TOUJOURS INTÉRESSÉ.E ?`;
 
+const LINKEDIN_JOB = (id: number, place: string) =>
+  `https://www.linkedin.com/comm/jobs/view/${id}/?trackingId=a&trk=eml-job_posting_${place}&otpToken=secret`;
+
+const LINKEDIN = `OFFRES D’EMPLOI SIMILAIRES À CHEF DE PROJET CHEZ EXEMPLE [${LINKEDIN_JOB(100, "entete")}]
+
+${LINKEDIN_JOB(101, "logo")}
+
+Chef de projet digital (H/F) [${LINKEDIN_JOB(101, "intitule")}]
+
+Exemple SA · Bordeaux (Sur site)
+
+Recrutement actif
+
+Candidature simplifiée
+
+[${LINKEDIN_JOB(101, "carte")}]
+
+${LINKEDIN_JOB(102, "logo")}
+
+Chargé de partenariats [${LINKEDIN_JOB(102, "intitule")}]
+
+Voyages & Cie · Paris
+
+[${LINKEDIN_JOB(102, "carte")}]
+
+Voir toutes les offres d’emploi [https://www.linkedin.com/comm/jobs/search-results/?keywords=a]`;
+
 test("plateforme d'après l'expéditeur ; inconnue (Job Watch) → null", () => {
   assert.equal(platformOf("Hellowork Alert <alerte@emails.hellowork.com>"), "hellowork");
   assert.equal(platformOf("Indeed <donotreply@match.indeed.com>"), "indeed");
   assert.equal(platformOf("Welcome to the Jungle <alerts@welcometothejungle.com>"), "welcome-to-the-jungle");
+  assert.equal(platformOf("Alertes LinkedIn Jobs <jobalerts-noreply@linkedin.com>"), "linkedin");
+  assert.equal(platformOf("LinkedIn <jobs-noreply@linkedin.com>"), "linkedin");
+  assert.equal(platformOf("LinkedIn <messages-noreply@linkedin.com>"), null);
   assert.equal(platformOf("Job Watch <noreply@jobwatch.ch>"), null);
 });
 
-test("Hellowork : chaque annonce avec entreprise, lieu, contrat ; salaire facultatif", () => {
+test("LinkedIn : intitulé, entreprise et lieu ; en-tête ignoré ; lien sans suivi ni jeton", () => {
+  assert.deepEqual(extractOffers("linkedin", LINKEDIN), [
+    {
+      platform: "linkedin",
+      title: "Chef de projet digital (H/F)",
+      company: "Exemple SA",
+      location: "Bordeaux (Sur site)",
+      contract: null,
+      url: "https://www.linkedin.com/jobs/view/101/",
+    },
+    {
+      platform: "linkedin",
+      title: "Chargé de partenariats",
+      company: "Voyages & Cie",
+      location: "Paris",
+      contract: null,
+      url: "https://www.linkedin.com/jobs/view/102/",
+    },
+  ]);
+});
+
+test("Hellowork : chaque annonce avec entreprise, lieu, contrat ; salaire et entreprise facultatifs", () => {
   assert.deepEqual(extractOffers("hellowork", HELLOWORK), [
     {
       platform: "hellowork",
@@ -90,6 +151,14 @@ test("Hellowork : chaque annonce avec entreprise, lieu, contrat ; salaire facult
       location: "Lyon - 69",
       contract: "Intérim",
       url: "https://emails.hellowork.com/clic/2",
+    },
+    {
+      platform: "hellowork",
+      title: "Responsable Grands Comptes H/F",
+      company: null,
+      location: "Île-de-France",
+      contract: "CDI",
+      url: "https://emails.hellowork.com/clic/3",
     },
   ]);
 });

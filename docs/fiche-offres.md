@@ -32,7 +32,7 @@ alerte d'offres → annonces → doublon ? → filtre 1 (intitulé) → page de 
 ```
 
 1. **Alertes lues** : celles que le pré-filtre reconnaît comme alertes (`alerte-offres`), d'une
-   plateforme qu'on sait lire : Hellowork, Indeed, Welcome to the Jungle. Les autres (Job Watch,
+   plateforme qu'on sait lire : Hellowork, Indeed, Welcome to the Jungle, LinkedIn. Les autres (Job Watch,
    qui envoie surtout des formations) sont ignorées. La plateforme est reconnue à l'expéditeur :
    ce n'est pas une liste de tri, seulement le choix du bon extracteur.
 2. **Annonces** : intitulé, entreprise, lieu, contrat, lien.
@@ -45,7 +45,8 @@ alerte d'offres → annonces → doublon ? → filtre 1 (intitulé) → page de 
 5. **Page de l'annonce** : on suit le lien et on ne garde **que la description** du poste
    (ni menus, ni pied de page), plafonnée à 8 000 caractères. Si la page est illisible
    (Indeed, protection anti-robot), l'annonce est gardée sans filtre 2, avec une pastille
-   « non vérifiée ».
+   « non vérifiée ». Les pages LinkedIn ne sont pas ouvertes (connexion exigée) : ses annonces
+   sont toutes « non vérifiées ».
 6. **Filtre 2, par Claude** (Haiku) : à partir de mon profil, Claude juge
    - la **séniorité** : poste de type produit / projet de débutant à 4 ans d'expérience demandés,
      poste de développeur de débutant à 2 ans ;

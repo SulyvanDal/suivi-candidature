@@ -27,7 +27,9 @@ export const EXCLUSIONS: ExclusionRule[] = [
     name: "alerte-offres",
     subject:
       /nouvelles offres|offres? récentes|nouveautés du jour|sélection d.offres|\brecrute (un|une|des)\b|offres? d.emploi rien que pour vous/i,
-    text: /pourrait correspondre pour l.offre d.emploi suivante/i,
+    // Indeed ; pieds des alertes LinkedIn, dont l'objet n'est que l'intitulé d'une annonce
+    // (« Travel Manager H/F chez Exemple »).
+    text: /pourrait correspondre pour l.offre d.emploi suivante|vous recevez des e-mails (d.alertes emploi|sur les offres d.emploi consultées)/i,
   },
 ];
 

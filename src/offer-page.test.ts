@@ -102,3 +102,20 @@ test("pages en attente : seules les annonces gardées et pas encore lues ; un é
   await readPendingPages(db, read, 0);
   assert.deepEqual(asked, ["u-reseau"]);
 });
+
+test("pages en attente : une annonce LinkedIn n'est pas ouverte, elle est non vérifiée d'emblée", async () => {
+  const db = openDb(":memory:");
+  const alert = { gmailId: "al", receivedAt: new Date("2026-10-06") };
+  const url = "https://www.linkedin.com/jobs/view/101/";
+  const offer = { platform: "linkedin" as const, title: "Chef de projet", company: "Ex", location: "Paris", contract: null, url };
+  saveOffer(db, offer, { keep: true, rule: "poste-recherche" }, alert);
+
+  const asked: string[] = [];
+  const read = async (u: string): Promise<PageResult> => (asked.push(u), { status: "lue", url: u, description: "…" });
+  assert.deepEqual(await readPendingPages(db, read, 0), { read: 0, unverified: 1, retry: 0 });
+  assert.deepEqual(asked, []);
+  assert.deepEqual(
+    { ...db.prepare("SELECT page_status, page_url, page_error FROM offers").get() },
+    { page_status: "non_verifiee", page_url: url, page_error: "page non lue (connexion requise)" },
+  );
+});

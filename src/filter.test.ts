@@ -68,6 +68,14 @@ test("alertes d'offres : écartées même si elles parlent de candidature", () =
     mail("Product Owner H/F – Assystem", "Votre parcours pourrait correspondre pour l'offre d'emploi suivante : …"),
   );
   assert.equal(indeed.rule, "alerte-offres");
+  // LinkedIn : l'objet n'est que l'intitulé d'une annonce (« Recrutement actif » dans le texte).
+  for (const footer of [
+    "Vous recevez des e-mails d’alertes Emploi. Gérer les alertes Emploi",
+    "Vous recevez des e-mails sur les offres d’emploi consultées Se désabonner",
+  ]) {
+    const linkedin = filterMail(mail("Chef de projet H/F chez Exemple", `Recrutement actif\n${footer}`));
+    assert.equal(linkedin.rule, "alerte-offres", footer);
+  }
 });
 
 test("mail sans rapport : écarté", () => {

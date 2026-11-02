@@ -12,7 +12,7 @@ import { loadTitleRules, openDb } from "./db.js";
 import { extractMail, htmlTextWithLinks } from "./extract.js";
 import { filterMail } from "./filter.js";
 import { type PageResult, readOfferPage } from "./offer-page.js";
-import { extractOffers, type Offer, platformOf, titleFilter } from "./offers.js";
+import { extractOffers, type Offer, platformOf, readsPage, titleFilter } from "./offers.js";
 import { withRetry } from "./retry.js";
 import { gmailSource } from "./sync.js";
 
@@ -74,7 +74,7 @@ for (const { offer: o, loose: a, strict: b } of [...decisions].sort((x, y) => x.
 
 // --- 3. Lecture des pages des annonces retenues par la variante la plus large (A) ---------------
 
-const toRead = decisions.filter((d) => d.loose.keep).map((d) => d.offer);
+const toRead = decisions.filter((d) => d.loose.keep && readsPage(d.offer.platform)).map((d) => d.offer);
 console.log(`\nLecture de ${toRead.length} page(s) d'annonce…`);
 const pages = new Map<Offer, PageResult>();
 // Une page à la fois avec une pause : en rafale, Hellowork répond 403.

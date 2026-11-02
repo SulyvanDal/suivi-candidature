@@ -196,8 +196,14 @@ lecture du corps des mails.
   l'utilisateur : doux et chaleureux (beige, sauge, terracotta), polices Apple, liste aérée.
 - Veille des offres (fiche [docs/fiche-offres.md](docs/fiche-offres.md), milestone 8) : pendant la
   synchronisation, les alertes `alerte-offres` d'une plateforme connue (`src/offers.ts` : Hellowork,
-  Indeed, Welcome to the Jungle, reconnues à l'expéditeur pour choisir l'extracteur ; Job Watch
-  ignoré) donnent des annonces, lues dans le HTML avec les liens complets (`htmlTextWithLinks`).
+  Indeed, Welcome to the Jungle, LinkedIn, reconnues à l'expéditeur pour choisir l'extracteur ; Job
+  Watch ignoré) donnent des annonces, lues dans le HTML avec les liens complets (`htmlTextWithLinks`).
+  Hellowork : entreprise absente des annonces anonymes, champs lus à partir du contrat. LinkedIn (#32,
+  alertes de recherche et « offres similaires ») : pas de contrat ; lien réduit à
+  `linkedin.com/jobs/view/<numéro>/` (celui du mail porte un jeton de connexion `otpToken`, jamais
+  enregistré) ; pages jamais ouvertes (`readsPage`), annonces `non_verifiee` d'emblée, sans tri par
+  Claude (décision utilisateur : pas de tri sur l'intitulé seul). Pré-filtre : alertes LinkedIn
+  reconnues à leur pied de mail (objet = intitulé d'une annonce).
   Table `offers` : doublons (intitulé + entreprise sans casse ni accents) jamais réenregistrés,
   annonces écartées gardées (compteur, doublons). Filtre sur l'intitulé « garder + exclure » (mots
   entiers, accents ignorés, `*` en fin de mot), listes dans `offer_terms`. Pages (#22,

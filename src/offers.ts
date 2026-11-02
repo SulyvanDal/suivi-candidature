@@ -15,12 +15,14 @@ export interface Offer {
   url: string;
 }
 
-export type Platform = "hellowork" | "indeed" | "welcome-to-the-jungle";
+export type Platform = "hellowork" | "indeed" | "welcome-to-the-jungle" | "linkedin";
 
 const PLATFORMS: { platform: Platform; from: RegExp }[] = [
   { platform: "hellowork", from: /@emails\.hellowork\.com\b/i },
   { platform: "indeed", from: /@match\.indeed\.com\b/i },
   { platform: "welcome-to-the-jungle", from: /@welcometothejungle\.com\b/i },
+  // Alertes de recherche (jobalerts) et « offres similaires à… » (jobs).
+  { platform: "linkedin", from: /\b(jobs|jobalerts)-noreply@linkedin\.com\b/i },
 ];
 
 /** Plateforme de l'alerte d'après l'expéditeur, ou null si on ne sait pas la lire. */
@@ -28,9 +30,16 @@ export function platformOf(from: string): Platform | null {
   return PLATFORMS.find((p) => p.from.test(from))?.platform ?? null;
 }
 
+/**
+ * Pages d'annonce qu'on ne lit pas : LinkedIn exige une connexion, et on ne contourne pas les
+ * protections des plateformes (#32). Ces annonces restent « non vérifiées », sans tri par Claude.
+ */
+export const readsPage = (platform: Platform) => platform !== "linkedin";
+
 export function extractOffers(platform: Platform, text: string, subject = ""): Offer[] {
   if (platform === "hellowork") return hellowork(text);
   if (platform === "indeed") return indeed(text, subject);
+  if (platform === "linkedin") return linkedin(text);
   return welcomeToTheJungle(text);
 }
 
@@ -40,7 +49,8 @@ const paragraphs = (text: string) => text.split(/\n{2,}/).map((p) => p.trim());
 
 /**
  * Hellowork : pour chaque annonce, des paragraphes successifs
- *   Intitulé [lien] / Entreprise / Lieu / Contrat / Salaire (facultatif) / Voir l'offre [lien]
+ *   Intitulé [lien] / Entreprise (facultative) / Lieu / Contrat / Salaire (facultatif) / Voir l'offre [lien]
+ * Une annonce anonyme n'a pas d'entreprise : les champs se lisent donc en partant du contrat.
  */
 function hellowork(text: string): Offer[] {
   const offers: Offer[] = [];
@@ -51,12 +61,14 @@ function hellowork(text: string): Offer[] {
     const end = paras.findIndex((p, j) => j > i && /^voir l.offre \[/i.test(p));
     if (end < 0) continue;
     const fields = paras.slice(i + 1, end);
+    if (/€/.test(fields.at(-1) ?? "")) fields.pop(); // salaire
+    const [contract, location, company] = fields.reverse();
     offers.push({
       platform: "hellowork",
       title: head[1],
-      company: fields[0]?.replace(/Super recruteur$/, "").trim() || null,
-      location: fields[1] ?? null,
-      contract: fields[2] ?? null,
+      company: company?.replace(/Super recruteur$/, "").trim() || null,
+      location: location ?? null,
+      contract: contract ?? null,
       url: head[2],
     });
     i = end;
@@ -94,6 +106,34 @@ function welcomeToTheJungle(text: string): Offer[] {
   for (const m of text.matchAll(re)) {
     if (/^voir /i.test(m[3])) continue;
     offers.push({ platform: "welcome-to-the-jungle", title: m[3], company: m[1], location: m[6], contract: m[5], url: m[4] });
+  }
+  return offers;
+}
+
+/**
+ * LinkedIn : pour chaque annonce, deux paragraphes successifs
+ *   Intitulé [lien …/jobs/view/<numéro>/…] / Entreprise · Lieu
+ * Pas de type de contrat. Le lien est réduit à l'adresse de l'annonce : celui du mail porte des
+ * paramètres de suivi et un jeton de connexion (otpToken) qu'on n'enregistre pas.
+ */
+function linkedin(text: string): Offer[] {
+  const offers: Offer[] = [];
+  const paras = paragraphs(text);
+  for (let i = 0; i + 1 < paras.length; i++) {
+    const head = LINKED.exec(paras[i]);
+    const job = head && /\/jobs\/view\/(\d+)/.exec(head[2]);
+    // L'en-tête « Offres similaires à… » pointe aussi vers une annonce, mais sans « Entreprise · Lieu ».
+    const where = /^([^[\]]+?) · ([^[\]]+)$/.exec(paras[i + 1]);
+    if (!head || !job || !where) continue;
+    offers.push({
+      platform: "linkedin",
+      title: head[1],
+      company: where[1],
+      location: where[2],
+      contract: null,
+      url: `https://www.linkedin.com/jobs/view/${job[1]}/`,
+    });
+    i++;
   }
   return offers;
 }
