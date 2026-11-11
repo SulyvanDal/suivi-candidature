@@ -64,6 +64,9 @@ Sur https://console.cloud.google.com, connecté avec le compte Gmail à lire :
 3. **Configurer l'écran de consentement** : *Google Auth Platform* → **Commencer** :
    nom de l'application, e-mail d'assistance, audience **Externe**, puis **Créer**. Ensuite :
    - **Accès aux données** : ajouter uniquement `https://www.googleapis.com/auth/gmail.readonly` ;
+   - **Branding** : page d'accueil `https://github.com/SulyvanDal/suivi-candidature`, règles de
+     confidentialité [docs/confidentialite.md](docs/confidentialite.md) (son URL sur GitHub),
+     domaine autorisé `github.com` : exigés pour publier ;
    - **Audience** : publier l'application (**En production**) sans demander de validation.
      En mode **Test**, l'autorisation expire au bout de 7 jours (voir [Limites](#limites)).
 4. **Créer l'identifiant client** : *Clients → Créer un client → Application de bureau*.
@@ -182,10 +185,13 @@ plus cher.
 
 ## Limites
 
-- **Application en mode Test** : l'autorisation Gmail expire au bout de **7 jours** ; il faut
-  alors relancer `npm run list` (la synchronisation automatique notifie le problème). La publier
-  **En production sans validation** supprime cette limite (usage personnel, moins de
-  100 utilisateurs : pas d'audit nécessaire).
+- **Application En production sans validation** (depuis le 11/11/2026) : l'autorisation Gmail
+  n'expire plus au bout de 7 jours (usage personnel, moins de 100 utilisateurs : pas d'audit
+  nécessaire). À l'autorisation, Google affiche « Google n'a pas validé cette application » :
+  *Paramètres avancés → Accéder à … (non sécurisé)*.
+- En mode **Test**, elle expirait au bout de **7 jours** : constaté 4 fois en octobre et
+  novembre 2026, avec chaque fois la notification de la synchronisation automatique et un ou
+  deux jours de synchronisation manqués, jusqu'à la réautorisation (`npm run list`).
 - L'autorisation est aussi révoquée en cas de changement de mot de passe, de révocation de
   l'accès ou de 6 mois sans utilisation.
 - Indeed bloque la lecture des annonces : elles restent « non vérifiées » (non triées par Claude).

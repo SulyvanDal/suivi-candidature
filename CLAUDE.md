@@ -243,10 +243,11 @@ lecture du corps des mails.
 
 ## Limites connues
 
-- Application en mode **Test** : le refresh token expire au bout de **7 jours**.
-- Usage personnel (< 100 utilisateurs) : pas de validation Google ni d'audit nécessaire.
-  Pour l'application complète, envisager le passage **En production sans validation**,
-  qui supprime l'expiration des 7 jours (à vérifier dans la console le moment venu).
+- Application **En production sans validation** depuis le 11/11/2026 (#3) : plus d'expiration du
+  refresh token au bout de 7 jours (mode Test, constatée 4 fois, #2). Usage personnel
+  (< 100 utilisateurs) : pas d'audit. Publication conditionnée à la page *Branding* : page
+  d'accueil = dépôt GitHub, règles de confidentialité = `docs/confidentialite.md` (à tenir à jour
+  si les données envoyées changent). Écran « application non validée » à chaque autorisation.
 
 ## Feuille de route
 
