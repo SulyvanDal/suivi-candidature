@@ -9,8 +9,9 @@ import {
   sameCompany,
   sameJob,
   type CandidatureEvent,
+  type ClosedOfferEvent,
 } from "./candidatures.js";
-import { openDb, saveMailResult } from "./db.js";
+import { openDb, saveClosedOffers, saveMailResult } from "./db.js";
 
 // Événements fabriqués : aucune vraie donnée.
 
@@ -381,6 +382,117 @@ test("mails fondateurs : le premier mail, et celui de chaque candidature fusionn
   assert.deepEqual([...foundingMails("c", [...corrections])].sort(), ["a", "b", "c"]);
   assert.deepEqual([...foundingMails("b", [...corrections])].sort(), ["a", "b"]);
   assert.deepEqual([...foundingMails("z", [])], ["z"]);
+});
+
+// --- Offres fermées (#14) ---
+
+const closed = (day: number, company: string | null, jobTitle: string | null, gmailId = `ferme-${day}`): ClosedOfferEvent => ({
+  gmailId,
+  date: new Date(Date.UTC(2026, 6, day)),
+  company,
+  jobTitle,
+});
+
+test("offre fermée : une candidature Envoyée passe en Refus, le mail rejoint son historique", () => {
+  const { candidatures, closedLinks } = buildCandidatures([ev({ day: 1, gmailId: "envoi" })], [], [closed(20, "EXEMPLE", "Product Owner H/F")]);
+  const [c] = candidatures;
+  assert.equal(c.status, "Refus");
+  assert.equal(c.lastEventType, "offre_fermee");
+  assert.equal(c.lastEventAt.getUTCDate(), 20);
+  assert.deepEqual(c.events, ["envoi", "ferme-20"]);
+  assert.deepEqual(closedLinks, [{ gmailId: "ferme-20", candidatureId: "envoi" }]);
+});
+
+test("offre fermée : Entretien inchangé ; mail antérieur au dernier statut ou à la candidature sans effet", () => {
+  const interview = buildCandidatures([ev({ day: 1 }), ev({ day: 5, type: "entretien" })], [], [closed(20, "Exemple", "Product Owner")]);
+  assert.equal(interview.candidatures[0].status, "Entretien", "le poste est peut-être pourvu par moi");
+  assert.equal(interview.candidatures[0].lastEventType, "offre_fermee");
+
+  // Nouvel accusé de réception après le mail : la candidature reste Envoyée.
+  const resent = buildCandidatures([ev({ day: 1 }), ev({ day: 25 })], [], [closed(20, "Exemple", "Product Owner")]);
+  assert.equal(resent.candidatures[0].status, "Envoyée");
+
+  const later = buildCandidatures([ev({ day: 25 })], [], [closed(20, "Exemple", "Product Owner")]);
+  assert.equal(later.candidatures[0].status, "Envoyée", "candidature envoyée après le mail");
+  assert.deepEqual(later.closedLinks, []);
+});
+
+test("offre fermée : plusieurs candidatures pour le poste → la plus récente envoyée avant le mail", () => {
+  const { candidatures } = buildCandidatures(
+    [ev({ day: 1, gmailId: "ancienne" }), ev({ day: 3, type: "refus", gmailId: "refus" }), ev({ day: 10, gmailId: "nouvelle" })],
+    [],
+    [closed(20, "Exemple", "Product Owner")],
+  );
+  assert.deepEqual(candidatures.map((c) => [c.id, c.status]), [["ancienne", "Refus"], ["nouvelle", "Refus"]]);
+  assert.equal(candidatures[0].lastEventType, "refus", "l'ancienne n'est pas concernée");
+});
+
+test("offre fermée : entreprise seule (mail groupé) ou intitulé seul → seulement si une seule candidature possible", () => {
+  const events = [
+    ev({ day: 1, company: "Alpha", jobTitle: "Product Owner", gmailId: "a1" }),
+    ev({ day: 2, company: "Alpha", jobTitle: "Chef de projet", gmailId: "a2" }),
+    ev({ day: 3, company: "Beta", jobTitle: "Développeur", gmailId: "b" }),
+  ];
+  // Un mail groupé pour Alpha et Beta : Alpha est ambiguë, Beta passe en Refus.
+  const grouped = buildCandidatures(events, [], [closed(20, "Alpha", null, "groupe"), closed(20, "Beta", null, "groupe")]);
+  assert.deepEqual(grouped.candidatures.map((c) => [c.id, c.status]), [["a1", "Envoyée"], ["a2", "Envoyée"], ["b", "Refus"]]);
+  assert.deepEqual(grouped.closedLinks, [{ gmailId: "groupe", candidatureId: "b" }]);
+
+  const titleOnly = buildCandidatures(events, [], [closed(20, null, "chef de projet")]);
+  assert.deepEqual(titleOnly.candidatures.map((c) => c.status), ["Envoyée", "Refus", "Envoyée"]);
+});
+
+test("offre fermée : un mail groupé rejoint l'historique de chaque candidature concernée", () => {
+  const { candidatures, closedLinks } = buildCandidatures(
+    [ev({ day: 1, company: "Alpha", gmailId: "a" }), ev({ day: 2, company: "Beta", gmailId: "b" })],
+    [],
+    [closed(20, "Alpha", null, "groupe"), closed(20, "Beta", null, "groupe")],
+  );
+  assert.deepEqual(candidatures.map((c) => c.status), ["Refus", "Refus"]);
+  assert.deepEqual(closedLinks.map((l) => l.candidatureId), ["a", "b"]);
+});
+
+test("offre fermée : un statut corrigé après le mail l'emporte ; le mail retiré n'a plus d'effet", () => {
+  const events = [ev({ day: 1, gmailId: "envoi" })];
+  const offers = [closed(20, "Exemple", "Product Owner")];
+  const manual = buildCandidatures(events, [{ kind: "statut", candidatureId: "envoi", value: "Envoyée", at: new Date(Date.UTC(2026, 6, 21)) }], offers);
+  assert.equal(manual.candidatures[0].status, "Envoyée");
+
+  const removed = buildCandidatures(events, [{ kind: "detacher", gmailId: "ferme-20", candidatureId: "envoi" }], offers);
+  assert.equal(removed.candidatures[0].status, "Envoyée");
+  assert.deepEqual(removed.candidatures[0].events, ["envoi"]);
+  assert.deepEqual(removed.closedLinks, []);
+  assert.equal(removed.links.has("ferme-20"), false, "pas dans « À classer » : ce n'est pas un mail classé");
+
+  const notOne = buildCandidatures(events, [{ kind: "pas_candidature", candidatureId: "envoi" }], offers);
+  assert.deepEqual(notOne.closedLinks, []);
+});
+
+test("offre fermée en base : le mail groupé est lié aux deux candidatures", () => {
+  const db = openDb(":memory:");
+  const mail = (gmailId: string, day: number, company: string | null, extra: object = {}) =>
+    saveMailResult(db, {
+      gmailId,
+      receivedAt: new Date(Date.UTC(2026, 6, day)),
+      sent: false,
+      filterRule: "mot-cle",
+      eventType: "candidature_envoyee",
+      company,
+      jobTitle: "Product Owner",
+      ...extra,
+    });
+  mail("a", 1, "Alpha");
+  mail("b", 2, "Beta");
+  mail("groupe", 20, null, { filterRule: "offre-fermee", eventType: undefined });
+  saveClosedOffers(db, "groupe", new Date(Date.UTC(2026, 6, 20)), [
+    { company: "Alpha", jobTitle: null },
+    { company: "Beta", jobTitle: null },
+  ]);
+  rebuildCandidatures(db);
+  const links = db.prepare("SELECT candidature_id FROM mail_links WHERE gmail_id = 'groupe' ORDER BY 1").all();
+  assert.deepEqual(links.map((l) => l.candidature_id), ["a", "b"]);
+  const statuses = db.prepare("SELECT status FROM candidatures ORDER BY id").all();
+  assert.deepEqual(statuses.map((s) => s.status), ["Refus", "Refus"]);
 });
 
 test("critère #18 : une correction survit aux recalculs, et l'annuler rétablit l'automatique", () => {

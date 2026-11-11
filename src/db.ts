@@ -6,6 +6,7 @@
 import { mkdirSync, readdirSync, rmSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import type { ClosedOffer } from "./closed-offers.js";
 import { type Offer, offerKey, type TitleDecision, type TitleRules } from "./offers.js";
 
 export const DEFAULT_DB_PATH = "data/suivi.db";
@@ -209,6 +210,25 @@ const MIGRATIONS: string[] = [
       'taille', company_size)
   WHERE job_type IS NOT NULL;
   `,
+  // 17 — Offres fermées signalées par Hellowork (#14) : un mail groupé en signale plusieurs, et peut donc
+  // concerner plusieurs candidatures. mail_links perd sa clé primaire (un mail, une ligne par candidature) ;
+  // ses lignes sont gardées, l'interface en a besoin avant le prochain recalcul.
+  `
+  CREATE TABLE closed_offers (
+    gmail_id    TEXT NOT NULL,
+    received_at TEXT NOT NULL,
+    company     TEXT,               -- NULL : seulement l'intitulé (objet du mail)
+    job_title   TEXT                -- NULL : mail groupé, seulement les entreprises
+  );
+  CREATE TABLE mail_links_17 (
+    gmail_id       TEXT NOT NULL,
+    candidature_id TEXT,               -- NULL = non rattaché
+    to_check       INTEGER NOT NULL DEFAULT 0
+  );
+  INSERT INTO mail_links_17 SELECT gmail_id, candidature_id, to_check FROM mail_links;
+  DROP TABLE mail_links;
+  ALTER TABLE mail_links_17 RENAME TO mail_links;
+  `,
 ];
 
 /** Version du schéma une fois toutes les migrations appliquées. */
@@ -300,6 +320,13 @@ export interface MailResult {
   offerUrl?: string | null;
   /** Échec du traitement de ce mail (#31) : il est enregistré quand même, sans classification. */
   error?: string | null;
+}
+
+/** Offres fermées signalées par un mail (#14) ; celles d'un mail repassé sont remplacées. */
+export function saveClosedOffers(db: DatabaseSync, gmailId: string, receivedAt: Date, offers: ClosedOffer[]): void {
+  db.prepare("DELETE FROM closed_offers WHERE gmail_id = ?").run(gmailId);
+  const insert = db.prepare("INSERT INTO closed_offers (gmail_id, received_at, company, job_title) VALUES (?, ?, ?, ?)");
+  for (const o of offers) insert.run(gmailId, receivedAt.toISOString(), o.company, o.jobTitle);
 }
 
 export function saveMailResult(db: DatabaseSync, r: MailResult): void {

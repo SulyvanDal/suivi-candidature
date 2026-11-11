@@ -69,6 +69,20 @@ test("mail gardé par le pré-filtre : classé par Claude et enregistré", async
   assert.equal(row.location, null);
 });
 
+test("offre fermée (#14) : l'offre est notée sans Claude, une seule fois si le mail est repassé", async () => {
+  const text =
+    "Du nouveau pour votre candidature :\n\nChef de projet H/F dans l'entreprise Exemple SA.\n\n" +
+    "L'offre n'est plus disponible sur notre site. Avez-vous été recruté pour ce poste ? " +
+    "En répondant à ce questionnaire, vous nous permettez de mesurer la réactivité des recruteurs.";
+  const t = deps([gmailMessage("f", "L'offre de Chef de projet H/F n'est plus disponible", text)]);
+  await processMessage("f", t.deps);
+  await processMessage("f", t.deps);
+
+  assert.deepEqual(t.classified, []);
+  const rows = t.db.prepare("SELECT gmail_id, company, job_title FROM closed_offers").all();
+  assert.deepEqual(rows.map((r) => ({ ...r })), [{ gmail_id: "f", company: "Exemple SA", job_title: "Chef de projet H/F" }]);
+});
+
 test("mail écarté par le pré-filtre : pas envoyé à Claude, mais sa règle est enregistrée", async () => {
   const t = deps([gmailMessage("b", "L'offre de Chef de projet n'est plus disponible", "…", ["INBOX"])]);
   await processMessage("b", t.deps);

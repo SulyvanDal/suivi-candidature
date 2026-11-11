@@ -61,6 +61,9 @@ lecture du corps des mails.
 - `npm run config:initialiser` : écrit en base les mots-clés de départ de la configuration (affiche
   les différences ; `-- --remplacer` pour écrire). Gratuit.
 - `npm run candidatures` : recalcule les candidatures et les affiche (gratuit, n'appelle pas Claude).
+- `npm run offres-fermees:rattraper` : relit dans Gmail les mails « offre plus disponible » déjà en base,
+  puis recalcule les candidatures et affiche celles passées en Refus (#14, gratuit, jamais Claude ; une fois
+  par installation, les suivants sont lus pendant la synchronisation).
 - `npm test` : tests automatiques (`node:test`, fichiers `src/**/*.test.ts`).
 - `npm run typecheck` : vérification des types.
 
@@ -188,6 +191,17 @@ lecture du corps des mails.
   candidature fusionnée dedans), dont le retrait ferait perdre en silence les corrections qui y renvoient.
   Annulation = suppression de la ligne, depuis la page « Corrections ».
   Principe utilisateur : ne développer que ce qui sert maintenant, noter le reste en issue.
+- Offres fermées (#14, `src/closed-offers.ts`) : les mails Hellowork écartés par la règle `offre-fermee` sont
+  lus sans Claude pendant la synchronisation (un poste « <intitulé> dans l'entreprise <entreprise> » ; groupé
+  « Dans les entreprises A et B », entreprises seules ; sinon l'intitulé de l'objet) → table `closed_offers`
+  (migration 17 : `mail_links` perd sa clé primaire, un mail groupé pouvant concerner plusieurs candidatures).
+  Rapprochement dans `buildCandidatures`, après les fusions et avant les corrections de candidature, parmi les
+  candidatures envoyées avant le mail : entreprise + intitulé → la plus récente ; une seule des deux → une seule
+  candidature possible, sinon rien (Atos, Niji). Effet (décision utilisateur, 11/11/2026, à la place de « pas de
+  nouveau statut ») : mail dans l'historique (« Offre fermée », dernier événement `offre_fermee`), **Envoyée →
+  Refus** ; Entretien et Offre inchangés (poste peut-être pourvu par moi). Statut corrigé à la main après le mail
+  et retrait du mail (#19, il ne va pas dans « À classer ») l'emportent. Premier rattrapage (11/11/2026) :
+  21 offres, 10 rapprochées, 6 candidatures passées en Refus ; « Ekimetriks » (sic, Hellowork) non rapproché.
 - Synchronisation automatique (#12) : launchd **à 8 h** (`StartCalendarInterval`, lancé au réveil si
   le Mac dormait) **et toutes les heures** (`StartInterval`, dont le décompte est suspendu pendant la
   veille : seul, il partait jusqu'à une heure après le réveil) → `scripts/sync-auto.sh 8` →

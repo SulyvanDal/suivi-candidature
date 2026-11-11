@@ -155,6 +155,7 @@ notification : si celle de test n'apparaît pas, autoriser « Éditeur de script
 | `npm run ui` | Interface web locale (127.0.0.1 uniquement) | gratuit |
 | `npm run config:initialiser` | Écrit en base les mots-clés de départ de la configuration (`-- --remplacer`) | gratuit |
 | `npm run candidatures` | Recalcule les candidatures et les affiche dans le terminal | gratuit |
+| `npm run offres-fermees:rattraper` | Relit les mails Hellowork « offre plus disponible » déjà reçus et passe leurs candidatures en Refus (une fois par installation) | gratuit |
 | `npm run verifier` | Vérifie l'installation (Gmail, clé Claude, base, synchronisation automatique), sans rien modifier | gratuit |
 | `npm run list` | Mails des dernières 24 h (lance l'autorisation si nécessaire) | gratuit |
 | `npm run extract -- <id>` | Texte extrait d'un mail | gratuit |
@@ -206,6 +207,7 @@ plus cher.
 | `src/sync.ts`, `src/sync-run.ts` | Synchronisation incrémentale (`historyId`) et bilan |
 | `src/extract.ts`, `src/filter.ts` | Texte des mails, pré-filtre |
 | `src/classify.ts`, `src/candidatures.ts` | Classement par Claude, regroupement en candidatures |
+| `src/closed-offers.ts` | Offres fermées signalées par Hellowork |
 | `src/offers.ts`, `src/offer-page.ts`, `src/offer-judge.ts` | Annonces des alertes, lecture des pages, tri |
 | `src/db.ts` | Base SQLite et migrations versionnées |
 | `src/ui/` | Interface (Hono, HTML généré côté serveur, htmx servi en local) |

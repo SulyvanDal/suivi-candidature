@@ -18,6 +18,7 @@ test("crée la base, son dossier et le schéma", () => {
     .map((row) => row.name);
   assert.deepEqual(tables, [
     "candidatures",
+    "closed_offers",
     "corrections",
     "mail_links",
     "mail_results",

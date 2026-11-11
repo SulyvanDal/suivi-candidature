@@ -87,8 +87,9 @@ export function getCandidature(
   if (!row) return null;
   const mails = db
     .prepare(
-      `SELECT r.gmail_id, r.thread_id, r.received_at, r.event_type, r.sent, r.correspondent, r.subject,
-              r.justification, l.to_check
+      `SELECT r.gmail_id, r.thread_id, r.received_at, r.sent, r.correspondent, r.subject, r.justification, l.to_check,
+              -- Mail d'offre fermée (#14) : écarté du classement, donc sans type.
+              COALESCE(r.event_type, CASE r.filter_rule WHEN 'offre-fermee' THEN 'offre_fermee' END) AS event_type
        FROM mail_links l JOIN mail_results r USING (gmail_id)
        WHERE l.candidature_id = ? ORDER BY r.received_at`,
     )

@@ -11,6 +11,7 @@ const TYPE_LABELS: Record<string, string> = {
   offre: "Offre",
   refus: "Refus",
   autre: "Échange",
+  offre_fermee: "Offre fermée",
 };
 
 const TZ = "Europe/Paris";

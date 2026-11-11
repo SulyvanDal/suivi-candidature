@@ -6,6 +6,7 @@
 // 3. sinon : candidature_envoyee / entretien / offre / refus créent une candidature,
 //    un événement « autre » seul n'est pas rattaché.
 // Plusieurs candidatures possibles → la plus récente, marquée « à vérifier ».
+// Ensuite, une offre signalée fermée par Hellowork (#14) fait passer sa candidature de Envoyée à Refus.
 
 import type { DatabaseSync } from "node:sqlite";
 import type { EventType } from "./classify.js";
@@ -24,6 +25,14 @@ export interface CandidatureEvent {
 
 export type Status = "Envoyée" | "Entretien" | "Offre" | "Refus";
 
+/** Offre signalée fermée par un mail Hellowork (#14) : entreprise ou intitulé peuvent manquer. */
+export interface ClosedOfferEvent {
+  gmailId: string;
+  date: Date;
+  company: string | null;
+  jobTitle: string | null;
+}
+
 export interface Candidature {
   /** gmail_id du premier mail : identifiant stable (référencé par les corrections manuelles). */
   id: string;
@@ -35,7 +44,7 @@ export interface Candidature {
   status: Status;
   appliedAt: Date;
   lastEventAt: Date;
-  lastEventType: CandidatureEvent["type"];
+  lastEventType: CandidatureEvent["type"] | "offre_fermee";
   toCheck: boolean;
   events: string[];
   /** Date du mail qui a fixé le statut (pour savoir si un statut manuel est plus récent). */
@@ -105,7 +114,7 @@ export function sameJob(a: string, b: string): boolean {
  * - « faible » : même entreprise, poste inconnu d'un côté ;
  * - null : incompatibles.
  */
-function match(c: Candidature, e: CandidatureEvent): "forte" | "faible" | null {
+function match(c: Candidature, e: Pick<CandidatureEvent, "company" | "jobTitle">): "forte" | "faible" | null {
   const jobs = c.jobTitle && e.jobTitle ? sameJob(c.jobTitle, e.jobTitle) : null;
   if (c.company && e.company) {
     if (!sameCompany(c.company, e.company)) return null;
@@ -147,9 +156,12 @@ const isMailCorrection = (c: Correction): c is MailCorrection =>
 export function buildCandidatures(
   events: CandidatureEvent[],
   corrections: Correction[] = [],
+  closedOffers: ClosedOfferEvent[] = [],
 ): {
   candidatures: Candidature[];
   links: Map<string, Link>;
+  /** Mails d'offre fermée et leurs candidatures : un mail groupé peut en concerner plusieurs. */
+  closedLinks: { gmailId: string; candidatureId: string }[];
 } {
   const decided = new Map(corrections.filter(isMailCorrection).map((c) => [c.gmailId, c]));
   const candidatures: Candidature[] = [];
@@ -262,6 +274,27 @@ export function buildCandidatures(
     byId.delete(source.id);
   }
 
+  // Offres fermées (#14), après les fusions et avant les corrections : un statut corrigé à la main après le
+  // mail l'emporte. Le mail rejoint l'historique ; s'il a été retiré de la candidature (#19), il est ignoré.
+  const detached = new Set(corrections.flatMap((c) => (c.kind === "detacher" ? [`${c.gmailId} ${c.candidatureId}`] : [])));
+  const closedLinks: { gmailId: string; candidatureId: string }[] = [];
+  for (const o of [...closedOffers].sort((a, b) => a.date.getTime() - b.date.getTime())) {
+    const target = closedOfferTarget(result, o);
+    if (!target || detached.has(`${o.gmailId} ${target.id}`)) continue;
+    if (closedLinks.some((l) => l.gmailId === o.gmailId && l.candidatureId === target.id)) continue;
+    closedLinks.push({ gmailId: o.gmailId, candidatureId: target.id });
+    target.events.push(o.gmailId);
+    if (o.date >= target.lastEventAt) {
+      target.lastEventAt = o.date;
+      target.lastEventType = "offre_fermee";
+    }
+    // Entretien ou Offre : statut inchangé (Hellowork ferme aussi l'annonce quand le poste est pourvu).
+    if (target.status === "Envoyée" && o.date >= target.statusAt) {
+      target.status = "Refus";
+      target.statusAt = o.date;
+    }
+  }
+
   // Corrections sur les candidatures (#18), dans l'ordre où elles ont été faites.
   for (const c of corrections) {
     if (isMailCorrection(c) || c.kind === "fusionner") continue;
@@ -284,7 +317,20 @@ export function buildCandidatures(
     }
   }
 
-  return { candidatures: result, links };
+  return { candidatures: result, links, closedLinks: closedLinks.filter((l) => byId.has(l.candidatureId)) };
+}
+
+/**
+ * Candidature d'une offre fermée, parmi celles envoyées avant le mail. Entreprise et intitulé connus : la plus
+ * récente qui correspond. Seulement l'un des deux (mail groupé, objet seul) : il faut une seule candidature
+ * possible, une erreur ferait passer à tort une candidature en Refus.
+ */
+function closedOfferTarget(candidatures: Candidature[], o: ClosedOfferEvent): Candidature | undefined {
+  const before = candidatures.filter((c) => c.appliedAt <= o.date);
+  const strong = before.filter((c) => match(c, o) === "forte");
+  const pool = strong.length > 0 ? strong : before.filter((c) => match(c, o) === "faible");
+  if (!o.company || !o.jobTitle) return pool.length === 1 ? pool[0] : undefined;
+  return pool.reduce<Candidature | undefined>((a, b) => (!a || b.appliedAt > a.appliedAt ? b : a), undefined);
 }
 
 /**
@@ -402,7 +448,7 @@ export { FIELD_COLUMNS };
 
 /** Recalcule les candidatures à partir des mails classés et des corrections manuelles,
  *  et remplace les tables calculées. */
-export function rebuildCandidatures(db: DatabaseSync): { candidatures: Candidature[]; links: Map<string, Link> } {
+export function rebuildCandidatures(db: DatabaseSync): ReturnType<typeof buildCandidatures> {
   const rows = db
     .prepare(
       `SELECT gmail_id, thread_id, received_at, event_type, company, job_title, location, channel, offer_url
@@ -422,7 +468,11 @@ export function rebuildCandidatures(db: DatabaseSync): { candidatures: Candidatu
     offerUrl: r.offer_url,
   }));
 
-  const result = buildCandidatures(events, loadCorrections(db));
+  const closedOffers: ClosedOfferEvent[] = (
+    db.prepare("SELECT gmail_id, received_at, company, job_title FROM closed_offers").all() as Record<string, string | null>[]
+  ).map((r) => ({ gmailId: r.gmail_id!, date: new Date(r.received_at!), company: r.company, jobTitle: r.job_title }));
+
+  const result = buildCandidatures(events, loadCorrections(db), closedOffers);
 
   db.exec("BEGIN");
   try {
@@ -449,6 +499,7 @@ export function rebuildCandidatures(db: DatabaseSync): { candidatures: Candidatu
     }
     const insertL = db.prepare("INSERT INTO mail_links (gmail_id, candidature_id, to_check) VALUES (?, ?, ?)");
     for (const [gmailId, l] of result.links) insertL.run(gmailId, l.candidatureId, l.toCheck ? 1 : 0);
+    for (const l of result.closedLinks) insertL.run(l.gmailId, l.candidatureId, 0);
     db.exec("COMMIT");
   } catch (err) {
     db.exec("ROLLBACK");

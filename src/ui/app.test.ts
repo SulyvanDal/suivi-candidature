@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { rebuildCandidatures } from "../candidatures.js";
-import { getSetting, loadTitleRules, openDb, PROFILE_KEY, saveMailResult, saveOffer, saveSyncState } from "../db.js";
+import {
+  getSetting,
+  loadTitleRules,
+  openDb,
+  PROFILE_KEY,
+  saveClosedOffers,
+  saveMailResult,
+  saveOffer,
+  saveSyncState,
+} from "../db.js";
 import { loadConfig } from "../config.js";
 import { loadCeilings } from "../offer-judge.js";
 import { createApp } from "./app.js";
@@ -284,6 +293,40 @@ test("retirer un mail : ni le premier mail d'une candidature fusionnée, ni un m
   assert.equal((await post(app, "/candidatures/a1/mails/b1/retirer")).status, 400);
   assert.equal((await post(app, "/candidatures/inconnue/mails/c2/retirer")).status, 404);
   assert.equal((await post(app, "/candidatures/a1/mails/c2/retirer", {}, "https://site-malveillant.example")).status, 403);
+});
+
+// --- Offres fermées (#14) ---
+
+test("offre fermée : la candidature passe en Refus, « Offre fermée » dans l'historique et sur sa ligne", async () => {
+  const db = openDb(":memory:");
+  saveMailResult(db, {
+    gmailId: "a1",
+    receivedAt: new Date("2026-10-01T09:00:00Z"),
+    sent: false,
+    filterRule: "mot-cle",
+    eventType: "candidature_envoyee",
+    company: "Exemple",
+    jobTitle: "Product Owner",
+  });
+  saveMailResult(db, {
+    gmailId: "f1",
+    receivedAt: new Date("2026-10-04T09:00:00Z"),
+    sent: false,
+    filterRule: "offre-fermee",
+    subject: "L'offre de Product Owner n'est plus disponible",
+    correspondent: "Hellowork <emploi@exemple.com>",
+  });
+  saveClosedOffers(db, "f1", new Date("2026-10-04T09:00:00Z"), [{ company: "Exemple", jobTitle: "Product Owner" }]);
+  rebuildCandidatures(db);
+  const app = createApp(db, () => NOW, CONFIG);
+
+  assert.match(listPart(await (await app.request("/")).text()), /Offre fermée le 4 oct\./);
+  const page = await (await app.request("/candidatures/a1")).text();
+  assert.match(page, /class="badge [^"]*">Refus</);
+  assert.match(page, /class="evenement evenement-offre_fermee"/);
+  assert.match(page, /<span class="mail-type">Offre fermée<\/span>/);
+  assert.match(page, /mails\/f1\/retirer/, "retirable si le rapprochement est faux");
+  assert.doesNotMatch(await (await app.request("/a-classer")).text(), /f1/);
 });
 
 test("annuler une correction inconnue : 404", async () => {

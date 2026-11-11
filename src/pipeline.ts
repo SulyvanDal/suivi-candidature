@@ -1,10 +1,12 @@
 // Traitement d'un mail : extraction du texte → pré-filtre → classification par Claude → base.
 // Une alerte d'offres n'est pas classée : ses annonces sont extraites et filtrées sur l'intitulé (#21).
+// Un mail « offre plus disponible » non plus : l'offre fermée est notée, sans Claude (#14).
 
 import type { DatabaseSync } from "node:sqlite";
 import type { gmail_v1 } from "@googleapis/gmail";
 import { ClassificationFailedError, type ClassificationResult } from "./classify.js";
-import { loadTitleRules, saveMailResult, saveOffer } from "./db.js";
+import { parseClosedOffers } from "./closed-offers.js";
+import { loadTitleRules, saveClosedOffers, saveMailResult, saveOffer } from "./db.js";
 import { extractMail, type ExtractedMail, htmlTextWithLinks } from "./extract.js";
 import { filterMail, type FilterDecision } from "./filter.js";
 import { extractOffers, type Offer, platformOf, titleFilter } from "./offers.js";
@@ -82,6 +84,7 @@ export async function processMessage(id: string, deps: PipelineDeps): Promise<Pr
     error,
   });
   if (error) throw new MailFailedError(error);
+  if (decision.rule === "offre-fermee") saveClosedOffers(deps.db, id, mail.date, parseClosedOffers(mail));
   const offers = decision.rule === "alerte-offres" ? saveAlertOffers(deps.db, message, mail) : undefined;
   return { mail, decision, result, offers };
 }

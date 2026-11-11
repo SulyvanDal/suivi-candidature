@@ -183,6 +183,7 @@ h2 {
 .evenement-entretien::before { background: var(--entretien); }
 .evenement-offre::before { background: var(--offre); }
 .evenement-refus::before { background: var(--refus); }
+.evenement-offre_fermee::before { background: var(--refus); }
 
 .evenement-entete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .mail-type { font-weight: 600; }
