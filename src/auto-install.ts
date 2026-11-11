@@ -19,8 +19,8 @@ export const LABEL = "com.suivi-candidature.sync";
 /** Heure de lancement (décision utilisateur : 8 h). */
 export const HOUR = 8;
 
-const PROJECT_DIR = resolve(dirname(new URL(import.meta.url).pathname), "..");
-const PLIST_PATH = join(homedir(), "Library", "LaunchAgents", `${LABEL}.plist`);
+export const PROJECT_DIR = resolve(dirname(new URL(import.meta.url).pathname), "..");
+export const PLIST_PATH = join(homedir(), "Library", "LaunchAgents", `${LABEL}.plist`);
 const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /** Intervalle entre deux lancements : le script ne synchronise qu'une fois par jour, après `hour`. */
@@ -79,7 +79,7 @@ export function stableNodeDir(execPath: string): string {
 
 const domain = () => `gui/${process.getuid?.() ?? execFileSync("id", ["-u"]).toString().trim()}`;
 
-function isLoaded(): boolean {
+export function isLoaded(): boolean {
   try {
     execFileSync("launchctl", ["print", `${domain()}/${LABEL}`], { stdio: "ignore" });
     return true;

@@ -53,6 +53,10 @@ lecture du corps des mails.
   quotidienne (#12, `sync -- --auto`), plafonnée à 50 mails envoyés à Claude par jour.
 - `npm run auto:installer` / `auto:desinstaller` / `auto:statut` : synchronisation automatique
   quotidienne via launchd (#12), lancée par l'utilisateur. Journaux : `data/logs/` (comptes uniquement).
+- `npm run verifier` : vérification de l'installation (#40, `src/check-setup.ts`) : configuration,
+  droits de `secrets/`, compte Gmail autorisé et expiration de l'autorisation (`refresh_token_expires_in`),
+  clé Anthropic (`models.retrieve`, gratuit), base en lecture seule, launchd et jours manqués sur 7 jours ;
+  `-- --notification` envoie une notification de test. Gratuit, jamais de navigateur.
 - `npm run ui` : interface web locale sur http://127.0.0.1:4321 (gratuit, lecture seule de la base).
 - `npm run config:initialiser` : écrit en base les mots-clés de départ de la configuration (affiche
   les différences ; `-- --remplacer` pour écrire). Gratuit.

@@ -15,10 +15,10 @@ import type { AddressInfo } from "node:net";
 import { CodeChallengeMethod, OAuth2Client, type Credentials } from "google-auth-library";
 
 // Lecture seule des mails, et rien d'autre.
-const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
+export const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
 
-const CREDENTIALS_PATH = "secrets/credentials.json";
-const TOKEN_PATH = "secrets/token.json";
+export const CREDENTIALS_PATH = "secrets/credentials.json";
+export const TOKEN_PATH = "secrets/token.json";
 
 // Délai laissé pour accepter l'autorisation dans le navigateur.
 const CONSENT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -198,7 +198,7 @@ function openInBrowser(url: string): void {
 }
 
 /** Lit l'identifiant et le secret du client OAuth téléchargés depuis la console Google. */
-async function readClientCredentials(): Promise<{ clientId: string; clientSecret: string }> {
+export async function readClientCredentials(): Promise<{ clientId: string; clientSecret: string }> {
   let raw: string;
   try {
     raw = await readFile(CREDENTIALS_PATH, "utf8");

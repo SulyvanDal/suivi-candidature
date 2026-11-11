@@ -211,6 +211,9 @@ const MIGRATIONS: string[] = [
   `,
 ];
 
+/** Version du schéma une fois toutes les migrations appliquées. */
+export const SCHEMA_VERSION = MIGRATIONS.length;
+
 /** Attente maximale quand une autre connexion écrit (interface ouverte pendant la synchronisation). */
 const BUSY_TIMEOUT_MS = 5000;
 

@@ -22,7 +22,8 @@
     "config:initialiser": "tsx src/config-init.ts",
     "auto:installer": "tsx src/auto-install.ts installer",
     "auto:desinstaller": "tsx src/auto-install.ts desinstaller",
-    "auto:statut": "tsx src/auto-install.ts statut"
+    "auto:statut": "tsx src/auto-install.ts statut",
+    "verifier": "tsx src/check-setup.ts"
   },
   "repository": {
     "type": "git",

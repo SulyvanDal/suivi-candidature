@@ -129,6 +129,21 @@ npm run auto:desinstaller
 Journaux dans `data/logs/` : uniquement des comptes, jamais le contenu d'un mail. Au plus
 50 mails classés et 100 annonces triées par Claude par jour ; le reste attend le lendemain.
 
+### 6. Vérifier l'installation
+
+```sh
+npm run verifier                     # tout ce dont dépend la synchronisation, avec la commande pour corriger
+npm run verifier -- --notification   # envoie aussi une notification de test
+```
+
+Gratuit et sans effet (ni navigateur, ni appel payant, base lue seulement). Passe en revue la
+configuration, les droits des fichiers de `secrets/`, le **compte Gmail autorisé** (vérifier que
+c'est le bon) et la date d'expiration de l'autorisation, la clé Anthropic, la base (première
+synchronisation, profil, mots-clés), l'agent launchd et les jours sans synchronisation sur la
+dernière semaine. Les problèmes de la synchronisation automatique ne sont signalés que par une
+notification : si celle de test n'apparaît pas, autoriser « Éditeur de script » dans
+*Réglages Système → Notifications*.
+
 ## Commandes
 
 | Commande | Rôle | Coût |
@@ -137,6 +152,7 @@ Journaux dans `data/logs/` : uniquement des comptes, jamais le contenu d'un mail
 | `npm run ui` | Interface web locale (127.0.0.1 uniquement) | gratuit |
 | `npm run config:initialiser` | Écrit en base les mots-clés de départ de la configuration (`-- --remplacer`) | gratuit |
 | `npm run candidatures` | Recalcule les candidatures et les affiche dans le terminal | gratuit |
+| `npm run verifier` | Vérifie l'installation (Gmail, clé Claude, base, synchronisation automatique), sans rien modifier | gratuit |
 | `npm run list` | Mails des dernières 24 h (lance l'autorisation si nécessaire) | gratuit |
 | `npm run extract -- <id>` | Texte extrait d'un mail | gratuit |
 | `npm run filter -- --days 14` | Simulation du pré-filtre, sans rien écrire | gratuit |
@@ -188,6 +204,7 @@ plus cher.
 | `src/db.ts` | Base SQLite et migrations versionnées |
 | `src/ui/` | Interface (Hono, HTML généré côté serveur, htmx servi en local) |
 | `scripts/sync-auto.sh`, `src/auto-install.ts` | Synchronisation quotidienne via launchd |
+| `src/check-setup.ts` | Vérification de l'installation (`npm run verifier`) |
 
 Besoin fonctionnel : [docs/fiche-fonctionnelle.md](docs/fiche-fonctionnelle.md) et
 [docs/fiche-offres.md](docs/fiche-offres.md). Suivi du travail : issues GitHub.

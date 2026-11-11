@@ -22,7 +22,7 @@ export const PRICE_PER_MTOK = { input: 0.1, output: 0.5 };
  */
 export const THINKING = { type: "disabled" } as const;
 
-const API_KEY_PATH = "secrets/anthropic-api-key";
+export const API_KEY_PATH = "secrets/anthropic-api-key";
 
 /** Au-delà, le texte est coupé (et la coupe signalée). */
 const MAX_TEXT_CHARS = 8000;
