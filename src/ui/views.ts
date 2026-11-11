@@ -56,11 +56,19 @@ function layout(title: string, body: unknown) {
     </html>`;
 }
 
+/** Choix d'une candidature dans un menu (rattacher un mail, fusionner), par ordre alphabétique d'entreprise. */
+function candidatureOptions(candidatures: CandidatureRow[]) {
+  return [...candidatures]
+    .sort((a, b) => (a.company ?? "").localeCompare(b.company ?? "", "fr", { sensitivity: "base" }))
+    .map(
+      (c) => html`<option value="${c.id}">
+        ${c.company ?? "Entreprise inconnue"} · ${c.jobTitle ?? "poste non précisé"} (${c.status}, ${date(c.appliedAt)})
+      </option>`,
+    );
+}
+
 /** Page des mails à classer à la main (#17), ouverte depuis le bouton de la page principale. */
 export function toClassifyPage(mails: MailToClassify[], candidatures: CandidatureRow[]) {
-  const options = [...candidatures].sort((a, b) =>
-    (a.company ?? "").localeCompare(b.company ?? "", "fr", { sensitivity: "base" }),
-  );
   // hx-boost : les formulaires sont envoyés sans recharger toute la page (et marchent sans JavaScript).
   return layout(
     "À classer",
@@ -93,11 +101,7 @@ export function toClassifyPage(mails: MailToClassify[], candidatures: Candidatur
             <form method="post" action="/a-classer/${m.gmailId}/rattacher" class="rattacher">
               <select name="candidature" required aria-label="Candidature à laquelle rattacher ce mail">
                 <option value="">Rattacher à…</option>
-                ${options.map(
-                  (c) => html`<option value="${c.id}">
-                    ${c.company ?? "Entreprise inconnue"} · ${c.jobTitle ?? "poste non précisé"} (${date(c.appliedAt)})
-                  </option>`,
-                )}
+                ${candidatureOptions(candidatures)}
               </select>
               <button type="submit" class="bouton">Rattacher</button>
             </form>
@@ -382,8 +386,17 @@ const EDIT_STATUSES = ["Envoyée", "Entretien", "Offre", "Refus"] as const;
 const modified = (c: CandidatureRow, key: string) =>
   c.manual.includes(key) ? html`<span class="modifie" title="Corrigé à la main">modifié</span>` : "";
 
-/** Page d'une candidature : ses informations (éventuellement en mode modification) et ses mails. */
-export function detailPage(c: CandidatureRow, mails: MailRow[], editing = false) {
+/**
+ * Page d'une candidature : ses informations (éventuellement en mode modification) et ses mails.
+ * `candidatures` : celles dans lesquelles on peut la fusionner (#19) ; `locked` : mails qu'on ne peut pas en retirer.
+ */
+export function detailPage(
+  c: CandidatureRow,
+  mails: MailRow[],
+  editing = false,
+  candidatures: CandidatureRow[] = [],
+  locked: Set<string> = new Set(),
+) {
   const field = (label: string, key: string, value: unknown) =>
     html`<div class="info">
       <dt>${label} ${modified(c, key)}</dt>
@@ -423,6 +436,18 @@ export function detailPage(c: CandidatureRow, mails: MailRow[], editing = false)
           <a class="bouton" href="/candidatures/${c.id}/modifier">Modifier</a>
           <form
             method="post"
+            action="/candidatures/${c.id}/fusionner"
+            class="rattacher"
+            onsubmit="return confirm('Fusionner cette candidature dans celle choisie ? Ses mails y seront déplacés (annulable depuis la page Corrections)')"
+          >
+            <select name="cible" required aria-label="Candidature dans laquelle fusionner celle-ci">
+              <option value="">Fusionner dans…</option>
+              ${candidatureOptions(candidatures.filter((x) => x.id !== c.id))}
+            </select>
+            <button type="submit" class="bouton">Fusionner</button>
+          </form>
+          <form
+            method="post"
             action="/candidatures/${c.id}/pas-candidature"
             onsubmit="return confirm('Retirer cette candidature et ignorer ses mails ? (annulable depuis la page Corrections)')"
           >
@@ -456,7 +481,18 @@ export function detailPage(c: CandidatureRow, mails: MailRow[], editing = false)
             <div class="mail-objet">${m.subject || "(sans objet)"}</div>
             <div class="mail-sens">${m.sent ? "Envoyé à" : "Reçu de"} ${m.correspondent ?? "?"}</div>
             ${m.justification ? html`<p class="mail-justification">${m.justification}</p>` : ""}
-            <a class="mail-lien" href="${gmailUrl(m)}" target="_blank" rel="noreferrer">Ouvrir dans Gmail</a>
+            <div class="mail-actions">
+              <a class="mail-lien" href="${gmailUrl(m)}" target="_blank" rel="noreferrer">Ouvrir dans Gmail</a>
+              ${locked.has(m.gmailId)
+                ? ""
+                : html`<form
+                    method="post"
+                    action="/candidatures/${c.id}/mails/${m.gmailId}/retirer"
+                    onsubmit="return confirm('Retirer ce mail de la candidature ? Il ira dans « À classer » (annulable depuis la page Corrections)')"
+                  >
+                    <button type="submit" class="lien-retirer">Retirer de la candidature</button>
+                  </form>`}
+            </div>
           </li>`,
         )}
       </ol>`,

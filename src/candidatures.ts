@@ -123,7 +123,9 @@ function match(c: Candidature, e: CandidatureEvent): "forte" | "faible" | null {
 export type MailCorrection =
   | { kind: "creer"; gmailId: string }
   | { kind: "rattacher"; gmailId: string; candidatureId: string }
-  | { kind: "ignorer"; gmailId: string };
+  | { kind: "ignorer"; gmailId: string }
+  // Retrait (#19) : le mail quitte `candidatureId` et redevient à classer.
+  | { kind: "detacher"; gmailId: string; candidatureId: string };
 
 export const EDITABLE_FIELDS = ["company", "jobTitle", "location", "channel", "offerUrl"] as const;
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
@@ -133,12 +135,14 @@ export type CandidatureCorrection =
   | { kind: "champ"; candidatureId: string; field: EditableField; value: string | null }
   // Option A : le statut manuel vaut jusqu'au prochain mail qui change le statut.
   | { kind: "statut"; candidatureId: string; value: Status; at: Date }
-  | { kind: "pas_candidature"; candidatureId: string };
+  | { kind: "pas_candidature"; candidatureId: string }
+  // Fusion (#19) : les mails de la candidature passent dans `intoId`, puis elle disparaît.
+  | { kind: "fusionner"; candidatureId: string; intoId: string };
 
 export type Correction = MailCorrection | CandidatureCorrection;
 
 const isMailCorrection = (c: Correction): c is MailCorrection =>
-  c.kind === "creer" || c.kind === "rattacher" || c.kind === "ignorer";
+  c.kind === "creer" || c.kind === "rattacher" || c.kind === "ignorer" || c.kind === "detacher";
 
 export function buildCandidatures(
   events: CandidatureEvent[],
@@ -168,6 +172,10 @@ export function buildCandidatures(
 
     // Décisions manuelles : elles passent avant les règles automatiques.
     if (decision?.kind === "ignorer") continue;
+    if (decision?.kind === "detacher") {
+      links.set(e.gmailId, { candidatureId: null, toCheck: false });
+      continue;
+    }
     if (decision?.kind === "rattacher") {
       const forced = byId.get(decision.candidatureId);
       if (forced) attach(forced, e, false);
@@ -232,10 +240,31 @@ export function buildCandidatures(
     else links.set(e.gmailId, { candidatureId: null, toCheck: false });
   }
 
-  // Corrections sur les candidatures (#18), dans l'ordre où elles ont été faites.
+  // Fusions (#19), dans l'ordre où elles ont été faites, avant les autres corrections : un statut
+  // corrigé sur la cible reste comparé à tous ses mails. Un mail arrivé plus tard dans le fil de la
+  // candidature fusionnée y a été rattaché ci-dessus, et suit donc le même chemin.
   let result = candidatures;
+  const eventById = new Map(sorted.map((e) => [e.gmailId, e]));
   for (const c of corrections) {
-    if (isMailCorrection(c)) continue;
+    if (c.kind !== "fusionner") continue;
+    const source = byId.get(c.candidatureId);
+    const target = byId.get(c.intoId);
+    if (!source || !target || source === target) continue; // candidature disparue : sans effet
+    const moved = source.events.map((id) => eventById.get(id)!).sort((a, b) => a.date.getTime() - b.date.getTime());
+    for (const e of moved) {
+      // Les informations de la cible restent prioritaires (apply ne remplit que les vides).
+      const { toCheck } = links.get(e.gmailId)!;
+      apply(target, e);
+      target.toCheck ||= toCheck;
+      links.set(e.gmailId, { candidatureId: target.id, toCheck });
+    }
+    result = result.filter((x) => x !== source);
+    byId.delete(source.id);
+  }
+
+  // Corrections sur les candidatures (#18), dans l'ordre où elles ont été faites.
+  for (const c of corrections) {
+    if (isMailCorrection(c) || c.kind === "fusionner") continue;
     const target = byId.get(c.candidatureId);
     if (!target) continue; // candidature disparue : correction sans effet
     if (c.kind === "champ") {
@@ -256,6 +285,25 @@ export function buildCandidatures(
   }
 
   return { candidatures: result, links };
+}
+
+/**
+ * Mails qui donnent son identifiant à la candidature : son premier mail, et celui de chaque candidature
+ * fusionnée dedans (#19). Les retirer changerait ces identifiants et ferait perdre les corrections qui y renvoient.
+ */
+export function foundingMails(candidatureId: string, corrections: Correction[]): Set<string> {
+  const founders = new Set([candidatureId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const c of corrections) {
+      if (c.kind === "fusionner" && founders.has(c.intoId) && !founders.has(c.candidatureId)) {
+        founders.add(c.candidatureId);
+        grew = true;
+      }
+    }
+  }
+  return founders;
 }
 
 function apply(c: Candidature, e: CandidatureEvent): void {
@@ -298,12 +346,14 @@ export function loadCorrections(db: DatabaseSync): Correction[] {
   const corrections: Correction[] = [];
   for (const r of rows) {
     if (r.kind === "creer" || r.kind === "ignorer") corrections.push({ kind: r.kind, gmailId: r.target });
-    else if (r.kind === "rattacher") corrections.push({ kind: "rattacher", gmailId: r.target, candidatureId: r.value ?? "" });
+    else if (r.kind === "rattacher" || r.kind === "detacher")
+      corrections.push({ kind: r.kind, gmailId: r.target, candidatureId: r.value ?? "" });
     else if (r.kind === "champ" && EDITABLE_FIELDS.includes(r.field as EditableField))
       corrections.push({ kind: "champ", candidatureId: r.target, field: r.field as EditableField, value: r.value });
     else if (r.kind === "statut" && STATUSES.includes(r.value as Status))
       corrections.push({ kind: "statut", candidatureId: r.target, value: r.value as Status, at: new Date(r.created_at) });
     else if (r.kind === "pas_candidature") corrections.push({ kind: "pas_candidature", candidatureId: r.target });
+    else if (r.kind === "fusionner" && r.value) corrections.push({ kind: "fusionner", candidatureId: r.target, intoId: r.value });
   }
   return corrections;
 }
@@ -323,7 +373,9 @@ export function addCorrection(db: DatabaseSync, correction: Correction, label: s
       insert.run(correction.kind, correction.gmailId, null, null, now);
       break;
     case "rattacher":
-      insert.run("rattacher", correction.gmailId, null, correction.candidatureId, now);
+    case "detacher":
+      // `value` : la candidature de destination (rattacher) ou d'origine (detacher).
+      insert.run(correction.kind, correction.gmailId, null, correction.candidatureId, now);
       break;
     case "champ":
       insert.run("champ", correction.candidatureId, correction.field, correction.value, now);
@@ -333,6 +385,10 @@ export function addCorrection(db: DatabaseSync, correction: Correction, label: s
       break;
     case "pas_candidature":
       insert.run("pas_candidature", correction.candidatureId, null, label, now);
+      break;
+    case "fusionner":
+      // `value` : la cible ; `field` : le nom de la candidature fusionnée, qui n'existe plus ensuite.
+      insert.run("fusionner", correction.candidatureId, label, correction.intoId, now);
       break;
   }
 }

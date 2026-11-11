@@ -4,6 +4,7 @@ import {
   addCorrection,
   buildCandidatures,
   cancelCorrection,
+  foundingMails,
   rebuildCandidatures,
   sameCompany,
   sameJob,
@@ -291,6 +292,95 @@ test("correction sur une candidature disparue : sans effet, pas d'erreur", () =>
     { kind: "champ", candidatureId: "fantome", field: "company", value: "X" },
   ]);
   assert.equal(candidatures[0].company, "Exemple");
+});
+
+// --- Fusion (#19) ---
+
+test("fusionner : les mails passent dans la cible, y compris les suivants du même fil, et la source disparaît", () => {
+  const events = [
+    ev({ day: 1, type: "entretien", company: "AUBAY SOLUTEC", jobTitle: null, gmailId: "aubay" }),
+    ev({ day: 1, type: "entretien", company: "Solutec (rejoint Aubay)", jobTitle: null, location: "Paris", threadId: "t", gmailId: "solutec" }),
+    ev({ day: 4, type: "autre", company: null, jobTitle: null, threadId: "t", gmailId: "reponse" }),
+    ev({ day: 9, type: "refus", company: null, jobTitle: null, threadId: "t", gmailId: "refus" }),
+  ];
+  assert.equal(buildCandidatures(events).candidatures.length, 2, "noms trop différents pour être rapprochés");
+
+  const { candidatures, links } = buildCandidatures(events, [{ kind: "fusionner", candidatureId: "solutec", intoId: "aubay" }]);
+  assert.equal(candidatures.length, 1);
+  const [c] = candidatures;
+  assert.equal(c.id, "aubay");
+  assert.deepEqual(["solutec", "reponse", "refus"].map((id) => links.get(id)?.candidatureId), ["aubay", "aubay", "aubay"]);
+  assert.equal(c.events.length, 4);
+  assert.equal(c.company, "AUBAY SOLUTEC", "les informations de la cible restent prioritaires");
+  assert.equal(c.location, "Paris", "celles de la source complètent les vides");
+  assert.equal(c.status, "Refus", "statut du mail le plus récent");
+  assert.equal(c.lastEventAt.getUTCDate(), 9);
+});
+
+test("fusionner : un statut corrigé sur la cible reste valable face aux mails plus anciens de la source", () => {
+  const { candidatures } = buildCandidatures(
+    [ev({ day: 1, company: "A", gmailId: "a" }), ev({ day: 3, company: "B", gmailId: "b" })],
+    [
+      { kind: "statut", candidatureId: "a", value: "Entretien", at: new Date(Date.UTC(2026, 6, 5)) },
+      { kind: "fusionner", candidatureId: "b", intoId: "a" },
+    ],
+  );
+  assert.equal(candidatures.length, 1);
+  assert.equal(candidatures[0].status, "Entretien");
+});
+
+test("fusions en chaîne ; fusion vers une candidature disparue ou vers elle-même : sans effet", () => {
+  const events = [ev({ day: 1, company: "A", gmailId: "a" }), ev({ day: 2, company: "B", gmailId: "b" }), ev({ day: 3, company: "C", gmailId: "c" })];
+  const chain = buildCandidatures(events, [
+    { kind: "fusionner", candidatureId: "a", intoId: "b" },
+    { kind: "fusionner", candidatureId: "b", intoId: "c" },
+  ]);
+  assert.deepEqual(chain.candidatures.map((c) => [c.id, c.events.length]), [["c", 3]]);
+
+  const none = buildCandidatures(events, [
+    { kind: "fusionner", candidatureId: "a", intoId: "disparue" },
+    { kind: "fusionner", candidatureId: "b", intoId: "b" },
+  ]);
+  assert.deepEqual(none.candidatures.map((c) => c.id), ["a", "b", "c"]);
+});
+
+// --- Retrait d'un mail (#19) ---
+
+test("retirer un mail : il redevient à classer et la candidature est recalculée sans lui", () => {
+  const events = [
+    ev({ day: 1, gmailId: "envoi" }),
+    ev({ day: 5, type: "entretien", gmailId: "entretien" }),
+    // Refus d'une autre candidature chez la même entreprise, rattaché à tort.
+    ev({ day: 9, type: "refus", jobTitle: null, gmailId: "refus" }),
+  ];
+  const { candidatures, links } = buildCandidatures(events, [{ kind: "detacher", gmailId: "refus", candidatureId: "envoi" }]);
+  assert.equal(candidatures.length, 1);
+  const [c] = candidatures;
+  assert.deepEqual(c.events, ["envoi", "entretien"]);
+  assert.equal(c.status, "Entretien");
+  assert.equal(c.lastEventAt.getUTCDate(), 5);
+  assert.deepEqual(links.get("refus"), { candidatureId: null, toCheck: false }, "à classer");
+});
+
+test("retirer puis rattacher ailleurs : la décision la plus récente l'emporte", () => {
+  const events = [ev({ day: 1, gmailId: "a" }), ev({ day: 2, company: "Autre", gmailId: "b" }), ev({ day: 3, gmailId: "c" })];
+  const { candidatures, links } = buildCandidatures(events, [
+    { kind: "detacher", gmailId: "c", candidatureId: "a" },
+    { kind: "rattacher", gmailId: "c", candidatureId: "b" },
+  ]);
+  assert.equal(links.get("c")?.candidatureId, "b");
+  assert.deepEqual(candidatures.map((x) => [x.id, x.events.length]), [["a", 1], ["b", 2]]);
+});
+
+test("mails fondateurs : le premier mail, et celui de chaque candidature fusionnée dedans, même en chaîne", () => {
+  const corrections = [
+    { kind: "fusionner", candidatureId: "a", intoId: "b" },
+    { kind: "fusionner", candidatureId: "b", intoId: "c" },
+    { kind: "fusionner", candidatureId: "x", intoId: "y" },
+  ] as const;
+  assert.deepEqual([...foundingMails("c", [...corrections])].sort(), ["a", "b", "c"]);
+  assert.deepEqual([...foundingMails("b", [...corrections])].sort(), ["a", "b"]);
+  assert.deepEqual([...foundingMails("z", [])], ["z"]);
 });
 
 test("critère #18 : une correction survit aux recalculs, et l'annuler rétablit l'automatique", () => {

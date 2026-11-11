@@ -8,6 +8,8 @@ import {
   addCorrection,
   cancelCorrection,
   EDITABLE_FIELDS,
+  foundingMails,
+  loadCorrections,
   rebuildCandidatures,
   type Status,
 } from "../candidatures.js";
@@ -36,6 +38,7 @@ import {
   listOffersToSee,
   listToClassify,
   offerStats,
+  type CandidatureRow,
 } from "./queries.js";
 import {
   correctionsPage,
@@ -48,6 +51,9 @@ import {
 } from "./views.js";
 
 const STATUSES: Status[] = ["Envoyée", "Entretien", "Offre", "Refus"];
+
+/** Nom d'une candidature gardé dans une correction qui la fait disparaître (page Corrections). */
+const labelOf = (c: CandidatureRow) => [c.company ?? "Entreprise inconnue", c.jobTitle].filter(Boolean).join(" · ");
 
 // htmx est servi depuis node_modules : la page ne charge rien depuis Internet.
 const HTMX = readFileSync("node_modules/htmx.org/dist/htmx.min.js", "utf8");
@@ -103,14 +109,15 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date(), 
   app.get("/candidatures/:id", (c) => {
     const found = getCandidature(db, c.req.param("id"), now());
     if (!found) return c.html(notFoundPage(), 404);
-    return c.html(detailPage(found.candidature, found.mails));
+    const locked = foundingMails(found.candidature.id, loadCorrections(db));
+    return c.html(detailPage(found.candidature, found.mails, false, listCandidatures(db, now()), locked));
   });
 
   // Édition (#18) : seules les informations réellement changées deviennent des corrections.
   app.get("/candidatures/:id/modifier", (c) => {
     const found = getCandidature(db, c.req.param("id"), now());
     if (!found) return c.html(notFoundPage(), 404);
-    return c.html(detailPage(found.candidature, found.mails, true));
+    return c.html(detailPage(found.candidature, found.mails, true, [], foundingMails(found.candidature.id, loadCorrections(db))));
   });
 
   app.post("/candidatures/:id/modifier", async (c) => {
@@ -137,11 +144,37 @@ export function createApp(db: DatabaseSync, now: () => Date = () => new Date(), 
     const id = c.req.param("id");
     const found = getCandidature(db, id, now());
     if (!found) return c.html(notFoundPage(), 404);
-    const { company, jobTitle } = found.candidature;
-    const label = [company ?? "Entreprise inconnue", jobTitle].filter(Boolean).join(" · ");
-    addCorrection(db, { kind: "pas_candidature", candidatureId: id }, label);
+    addCorrection(db, { kind: "pas_candidature", candidatureId: id }, labelOf(found.candidature));
     rebuildCandidatures(db);
     return c.redirect("/", 303);
+  });
+
+  // Fusion (#19) : la candidature et ses mails rejoignent la candidature choisie, qui s'affiche ensuite.
+  app.post("/candidatures/:id/fusionner", async (c) => {
+    const id = c.req.param("id");
+    const found = getCandidature(db, id, now());
+    if (!found) return c.html(notFoundPage(), 404);
+    const intoId = String((await c.req.parseBody()).cible ?? "");
+    const exists = db.prepare("SELECT 1 FROM candidatures WHERE id = ?").get(intoId);
+    if (!exists || intoId === id) return c.text("Candidature cible invalide", 400);
+    addCorrection(db, { kind: "fusionner", candidatureId: id, intoId }, labelOf(found.candidature));
+    rebuildCandidatures(db);
+    return c.redirect(`/candidatures/${intoId}`, 303);
+  });
+
+  // Retrait d'un mail (#19) : il quitte la candidature et redevient à classer. Pas celui qui donne son
+  // identifiant à la candidature (ni à une candidature fusionnée dedans) : ses corrections seraient perdues.
+  app.post("/candidatures/:id/mails/:gmailId/retirer", (c) => {
+    const id = c.req.param("id");
+    const gmailId = c.req.param("gmailId");
+    const found = getCandidature(db, id, now());
+    if (!found) return c.html(notFoundPage(), 404);
+    if (!found.mails.some((m) => m.gmailId === gmailId) || foundingMails(id, loadCorrections(db)).has(gmailId)) {
+      return c.text("Ce mail ne peut pas être retiré de cette candidature", 400);
+    }
+    addCorrection(db, { kind: "detacher", gmailId, candidatureId: id });
+    rebuildCandidatures(db);
+    return c.redirect(`/candidatures/${id}`, 303);
   });
 
   // Offres à regarder (#24).

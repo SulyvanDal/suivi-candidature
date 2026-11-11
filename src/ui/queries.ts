@@ -183,6 +183,9 @@ export function listCorrections(db: DatabaseSync): CorrectionRow[] {
       case "ignorer":
         description = `${mail(r)} ignoré`;
         break;
+      case "detacher":
+        description = `${mail(r)} retiré de ${name(r.value_company, r.value_job)}`;
+        break;
       case "champ":
         description = `${name(r.target_company, r.target_job)} : ${FIELD_LABELS[r.field as string] ?? r.field} → ${r.value ?? "vide"}`;
         break;
@@ -191,6 +194,9 @@ export function listCorrections(db: DatabaseSync): CorrectionRow[] {
         break;
       case "pas_candidature":
         description = `${r.value ?? "Candidature"} : ce n'est pas une candidature`;
+        break;
+      case "fusionner":
+        description = `${r.field ?? "Candidature"} fusionnée dans ${name(r.value_company, r.value_job)}`;
         break;
       default:
         description = `Correction ${r.kind}`;

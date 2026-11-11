@@ -191,6 +191,11 @@ h2 {
 .mail-sens { color: var(--discret); font-size: 0.9rem; }
 .mail-justification { margin: 8px 0; color: var(--discret); font-size: 0.92rem; font-style: italic; }
 .mail-lien { font-size: 0.9rem; }
+/* Retrait d'un mail (#19) : discret, à côté du lien vers Gmail. */
+.mail-actions { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+.mail-actions form { margin: 0; }
+.lien-retirer { padding: 0; border: 0; background: none; color: var(--discret); font: inherit; font-size: 0.9rem; cursor: pointer; }
+.lien-retirer:hover { text-decoration: underline; }
 
 /* À classer (#17) */
 .entete-liste { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }

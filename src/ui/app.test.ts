@@ -217,6 +217,75 @@ test("« ce n'est pas une candidature » puis annulation depuis la page Correcti
   assert.match(await (await app.request("/corrections")).text(), /Aucune correction/);
 });
 
+// --- Fusion (#19) ---
+
+test("page d'une candidature : menu de fusion avec les autres candidatures seulement", async () => {
+  const body = await (await setup().request("/candidatures/c1")).text();
+  assert.match(body, /action="\/candidatures\/c1\/fusionner"/);
+  assert.match(body, /<option value="a1">/);
+  assert.doesNotMatch(body, /<option value="c1">/);
+});
+
+test("fusionner : les mails rejoignent la cible, la candidature disparaît, puis annulation", async () => {
+  const app = setup();
+  const res = await post(app, "/candidatures/c1/fusionner", { cible: "a1" });
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get("location"), "/candidatures/a1");
+  assert.equal((await (await app.request("/candidatures/a1")).text()).match(/class="evenement /g)?.length, 3);
+  assert.doesNotMatch(listPart(await (await app.request("/")).text()), /Piège/);
+
+  const corrections = await (await app.request("/corrections")).text();
+  assert.match(corrections, /Piège · Product Owner fusionnée dans Exemple · Product Owner/);
+  const id = corrections.match(/\/corrections\/(\d+)\/annuler/)![1];
+  await post(app, `/corrections/${id}/annuler`);
+  assert.match(listPart(await (await app.request("/")).text()), /Piège/);
+  assert.equal((await (await app.request("/candidatures/a1")).text()).match(/class="evenement /g)?.length, 1);
+});
+
+test("fusionner : vers elle-même ou une cible inconnue refusé, candidature inconnue 404, autre site refusé", async () => {
+  const app = setup();
+  assert.equal((await post(app, "/candidatures/c1/fusionner", { cible: "c1" })).status, 400);
+  assert.equal((await post(app, "/candidatures/c1/fusionner", { cible: "nulle-part" })).status, 400);
+  assert.equal((await post(app, "/candidatures/inconnue/fusionner", { cible: "a1" })).status, 404);
+  assert.equal((await post(app, "/candidatures/c1/fusionner", { cible: "a1" }, "https://site-malveillant.example")).status, 403);
+});
+
+// --- Retrait d'un mail (#19) ---
+
+test("retirer un mail : bouton sur les mails suivants seulement ; le mail va dans « À classer », puis annulation", async () => {
+  const app = setup();
+  const page = await (await app.request("/candidatures/c1")).text();
+  assert.match(page, /action="\/candidatures\/c1\/mails\/c2\/retirer"/);
+  assert.doesNotMatch(page, /mails\/c1\/retirer/, "le premier mail donne son identifiant à la candidature");
+
+  const res = await post(app, "/candidatures/c1/mails/c2/retirer");
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get("location"), "/candidatures/c1");
+  const after = await (await app.request("/candidatures/c1")).text();
+  assert.equal(after.match(/class="evenement /g)?.length, 1);
+  assert.match(after, /class="badge [^"]*">Sans réponse</, "le refus retiré ne compte plus");
+  assert.match(await (await app.request("/a-classer")).text(), /action="\/a-classer\/c2\//);
+
+  const corrections = await (await app.request("/corrections")).text();
+  assert.match(corrections, /retiré de Piège · Product Owner/);
+  const id = corrections.match(/\/corrections\/(\d+)\/annuler/)![1];
+  await post(app, `/corrections/${id}/annuler`);
+  assert.equal((await (await app.request("/candidatures/c1")).text()).match(/class="evenement /g)?.length, 2);
+});
+
+test("retirer un mail : ni le premier mail d'une candidature fusionnée, ni un mail d'une autre candidature", async () => {
+  const app = setup();
+  await post(app, "/candidatures/c1/fusionner", { cible: "a1" });
+  const page = await (await app.request("/candidatures/a1")).text();
+  assert.match(page, /mails\/c2\/retirer/);
+  assert.doesNotMatch(page, /mails\/c1\/retirer/);
+  assert.equal((await post(app, "/candidatures/a1/mails/c1/retirer")).status, 400);
+  assert.equal((await post(app, "/candidatures/a1/mails/a1/retirer")).status, 400);
+  assert.equal((await post(app, "/candidatures/a1/mails/b1/retirer")).status, 400);
+  assert.equal((await post(app, "/candidatures/inconnue/mails/c2/retirer")).status, 404);
+  assert.equal((await post(app, "/candidatures/a1/mails/c2/retirer", {}, "https://site-malveillant.example")).status, 403);
+});
+
 test("annuler une correction inconnue : 404", async () => {
   assert.equal((await post(setup(), "/corrections/999/annuler")).status, 404);
 });

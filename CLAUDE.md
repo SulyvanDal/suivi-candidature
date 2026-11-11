@@ -177,8 +177,16 @@ lecture du corps des mails.
   récente par mail l'emporte) : `creer` (le mail compte comme un envoi), `rattacher` (forcé, même
   vers une candidature créée plus tard), `ignorer`, écrites depuis la page « À classer » (#17) ;
   `champ`, `statut` (option A : vaut jusqu'au prochain mail qui change le statut),
-  `pas_candidature`, écrites depuis la page d'une candidature (#18). Annulation = suppression de
-  la ligne, depuis la page « Corrections ». Fusion et retrait d'un mail : reportés (#19).
+  `pas_candidature`, écrites depuis la page d'une candidature (#18) ; `fusionner` (#19, menu
+  « Fusionner dans… » de la page d'une candidature : `value` = cible, `field` = nom de la source),
+  appliquée après la construction et **avant** les autres corrections de candidature : les mails de la
+  source passent dans la cible (informations de la cible prioritaires, celles de la source complètent
+  les vides), y compris les mails arrivés plus tard dans le fil de la source ; corrections faites sur
+  la source abandonnées ; `detacher` (#19, « Retirer de la candidature » sur un mail de l'historique) : le
+  mail redevient à classer (décision sur un mail : un rattachement fait ensuite l'emporte) ; refusé sur les mails
+  fondateurs (`foundingMails` : le premier mail, qui donne son identifiant à la candidature, et celui de chaque
+  candidature fusionnée dedans), dont le retrait ferait perdre en silence les corrections qui y renvoient.
+  Annulation = suppression de la ligne, depuis la page « Corrections ».
   Principe utilisateur : ne développer que ce qui sert maintenant, noter le reste en issue.
 - Synchronisation automatique (#12) : launchd **à 8 h** (`StartCalendarInterval`, lancé au réveil si
   le Mac dormait) **et toutes les heures** (`StartInterval`, dont le décompte est suspendu pendant la
